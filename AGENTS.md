@@ -135,6 +135,67 @@ npm run build:all    # backend + frontend
 - `process.env.NODE_DISABLE_COLORS = '1'` at the top of `src/index.ts` — ANSI codes break JSON stdio parsing
 - `{ history: 'ignore' }` in all `editor.run()` calls in App.tsx — prevents WS mutations from appearing in undo history
 
+## tldraw v4 Breaking Changes & Future-Proofing Notes
+
+These changes landed in tldraw v4.x and are **already handled** in `frontend/src/App.tsx`. Do not revert them.
+
+### v4.0 — Arrow shapes now use `richText` instead of `text`
+Arrow labels were the last shape type still using plain `text`. In v4.0 they joined geo/text/note:
+
+```typescript
+// ✅ Correct — all shapes now use richText
+props: { richText: toRichText('my label') }
+
+// ❌ Wrong — was valid in v3, breaks in v4
+props: { text: 'my label' }
+```
+
+### v4.0 — CSS variables renamed to `--tl-` prefix
+All tldraw CSS custom properties now start with `--tl-`. If you add custom CSS:
+```css
+/* ✅ v4 */  --tl-color-background: white;
+/* ❌ v3 */  --color-background: white;
+```
+
+### v4.2 — TipTap upgraded from v2 → v3
+Our `toRichText()` helper generates plain ProseMirror doc JSON (no TipTap-specific marks), so it's compatible with both versions. If you add rich text extensions or customize TipTap, follow [TipTap's v2→v3 migration guide](https://tiptap.dev/docs/guides/upgrade-tiptap-v2).
+
+### v4.3 — Draw shape point encoding changed
+`TLDrawShapeSegment.points` renamed to `.path` and changed from `VecModel[]` to `string` (base64-encoded delta encoding). New export: `getPointsFromDrawSegment()` helper to decode. **Not currently used, but required when adding draw shape support.**
+
+### v4.3 — Custom shape type declaration pattern changed (TypeScript only)
+Runtime behavior unchanged — TypeScript only. Use module augmentation instead of `TLBaseShape`:
+```typescript
+// ✅ v4.3+
+declare module 'tldraw' {
+  export interface TLGlobalShapePropsMap {
+    'my-shape': { w: number; h: number }
+  }
+}
+type MyShape = TLShape<'my-shape'>
+
+// ❌ v4.2 and below
+type MyShape = TLBaseShape<'my-shape', { w: number; h: number }>
+```
+
+### v4.4 — `options` prop consolidates `cameraOptions`/`textOptions`/`deepLinks`
+The standalone props are deprecated (still work). Prefer `options={{}}` going forward:
+```tsx
+// ✅ v4.4+ preferred
+<Tldraw options={{ camera: { isLocked: true }, deepLinks: true }} />
+
+// 🔜 deprecated but still works
+<Tldraw cameraOptions={{ isLocked: true }} deepLinks />
+```
+
+### v4.4 — `editor.spatialIndex` removed from public API
+Use `editor.getShapesAtPoint()` / `editor.getShapeAtPoint()` instead.
+
+### v4.5 — `EmbedShapeUtil.setEmbedDefinitions()` deprecated
+Use `EmbedShapeUtil.configure({ embedDefinitions: [...] })` instead.
+
+---
+
 ## tldraw v3 Breaking Changes (v3.10+)
 
 These were introduced in tldraw v3.10–v3.13 and are **already handled** in `frontend/src/App.tsx`. Do not revert them.

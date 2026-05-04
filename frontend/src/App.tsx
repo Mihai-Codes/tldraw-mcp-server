@@ -127,7 +127,7 @@ function buildShapeProps(el: CanvasElement): Record<string, unknown> {
       size: el.size ?? 'm',
       arrowheadStart: el.startArrowhead ?? 'none',
       arrowheadEnd: el.endArrowhead ?? (el.type === 'arrow' ? 'arrow' : 'none'),
-      text: el.text ?? '',
+      richText: toRichText(el.text ?? ''),
       font: el.font ?? 'draw',
       start: { x: 0, y: 0 },
       end: last ? { x: last[0], y: last[1] } : { x: (el.endX ?? el.x + 200) - el.x, y: (el.endY ?? el.y) - el.y },
@@ -156,8 +156,10 @@ function buildShapeProps(el: CanvasElement): Record<string, unknown> {
   }
 }
 
+type TLShapeType = 'text' | 'draw' | 'note' | 'arrow' | 'line' | 'frame' | 'geo' | 'bookmark' | 'embed' | 'group' | 'highlight' | 'image' | 'video'
+
 /** Determine the tldraw shape `type` string from a CanvasElement */
-function toTldrawType(type: string): string {
+function toTldrawType(type: string): TLShapeType {
   if (type === 'text') return 'text'
   if (type === 'note') return 'note'
   if (type === 'arrow') return 'arrow'

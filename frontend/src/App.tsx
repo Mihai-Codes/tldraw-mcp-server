@@ -33,6 +33,8 @@ interface CanvasElement {
   endElementId?: string
   startArrowhead?: string | null
   endArrowhead?: string | null
+  endX?: number
+  endY?: number
   points?: [number, number][]
 }
 
@@ -78,15 +80,25 @@ function toTldrawColor(color?: string): TLDefaultColorStyle {
   return map[color ?? 'black'] ?? 'black'
 }
 
+/** Convert plain text to tldraw v3 richText (TipTap ProseMirror JSON) */
+function toRichText(text: string): Record<string, unknown> {
+  const lines = text.split('\n')
+  const content = lines.map((line) => {
+    if (!line) return { type: 'paragraph' }
+    return { type: 'paragraph', content: [{ type: 'text', text: line }] }
+  })
+  return { type: 'doc', content }
+}
+
 /** Build tldraw shape props from a CanvasElement */
 function buildShapeProps(el: CanvasElement): Record<string, unknown> {
   const color = toTldrawColor(el.color)
-  const base = { color, opacity: (el.opacity ?? 100) / 100 }
+  const base = { color }
 
   if (el.type === 'text') {
     return {
       ...base,
-      text: el.text ?? '',
+      richText: toRichText(el.text ?? ''),
       size: el.size ?? 'm',
       font: el.font ?? 'draw',
       textAlign: 'middle',
@@ -98,7 +110,7 @@ function buildShapeProps(el: CanvasElement): Record<string, unknown> {
   if (el.type === 'note') {
     return {
       ...base,
-      text: el.text ?? '',
+      richText: toRichText(el.text ?? ''),
       size: el.size ?? 'm',
       font: el.font ?? 'draw',
       color: el.color ? toTldrawColor(el.color) : 'yellow',
@@ -107,6 +119,8 @@ function buildShapeProps(el: CanvasElement): Record<string, unknown> {
   }
 
   if (el.type === 'arrow' || el.type === 'line') {
+    const pts = el.points
+    const last = pts ? pts[pts.length - 1] : null
     const props: Record<string, unknown> = {
       ...base,
       dash: el.dash ?? 'draw',
@@ -115,18 +129,8 @@ function buildShapeProps(el: CanvasElement): Record<string, unknown> {
       arrowheadEnd: el.endArrowhead ?? (el.type === 'arrow' ? 'arrow' : 'none'),
       text: el.text ?? '',
       font: el.font ?? 'draw',
-    }
-    if (el.startElementId) {
-      props.start = { type: 'binding', boundShapeId: `shape:${el.startElementId}` as TLShapeId, normalizedAnchor: { x: 0.5, y: 0.5 }, isExact: false, isPrecise: false }
-    } else {
-      props.start = { type: 'point', x: 0, y: 0 }
-    }
-    if (el.endElementId) {
-      props.end = { type: 'binding', boundShapeId: `shape:${el.endElementId}` as TLShapeId, normalizedAnchor: { x: 0.5, y: 0.5 }, isExact: false, isPrecise: false }
-    } else {
-      const pts = el.points
-      const last = pts ? pts[pts.length - 1] : null
-      props.end = last ? { type: 'point', x: last[0], y: last[1] } : { type: 'point', x: 200, y: 0 }
+      start: { x: 0, y: 0 },
+      end: last ? { x: last[0], y: last[1] } : { x: (el.endX ?? el.x + 200) - el.x, y: (el.endY ?? el.y) - el.y },
     }
     return props
   }
@@ -141,7 +145,7 @@ function buildShapeProps(el: CanvasElement): Record<string, unknown> {
     geo: el.type,
     w: el.width ?? 160,
     h: el.height ?? 80,
-    text: el.text ?? '',
+    richText: toRichText(el.text ?? ''),
     fill: el.fill ?? 'none',
     dash: el.dash ?? 'draw',
     size: el.size ?? 'm',
@@ -179,6 +183,7 @@ function applyElement(editor: Editor, el: CanvasElement): void {
         type: shapeType,
         x: el.x,
         y: el.y,
+        opacity: (el.opacity ?? 100) / 100,
         props,
         isLocked: el.locked ?? false,
       })
@@ -188,6 +193,7 @@ function applyElement(editor: Editor, el: CanvasElement): void {
         type: shapeType,
         x: el.x,
         y: el.y,
+        opacity: (el.opacity ?? 100) / 100,
         props,
         isLocked: el.locked ?? false,
       })
@@ -198,9 +204,53 @@ function applyElement(editor: Editor, el: CanvasElement): void {
       type: shapeType,
       x: el.x,
       y: el.y,
+      opacity: (el.opacity ?? 100) / 100,
       props,
       isLocked: el.locked ?? false,
     })
+  }
+
+  // tldraw v3: arrow bindings are separate records, not embedded in props
+  if (el.type === 'arrow' || el.type === 'line') {
+    // Remove any existing bindings for this arrow
+    const existingBindings = editor.getBindingsFromShape(shapeId, 'arrow')
+    for (const b of existingBindings) {
+      editor.deleteBinding(b.id)
+    }
+    // Create start binding
+    if (el.startElementId) {
+      const targetId = createShapeId(el.startElementId)
+      if (editor.getShape(targetId)) {
+        editor.createBinding({
+          type: 'arrow',
+          fromId: shapeId,
+          toId: targetId,
+          props: {
+            terminal: 'start',
+            normalizedAnchor: { x: 0.5, y: 0.5 },
+            isExact: false,
+            isPrecise: false,
+          },
+        })
+      }
+    }
+    // Create end binding
+    if (el.endElementId) {
+      const targetId = createShapeId(el.endElementId)
+      if (editor.getShape(targetId)) {
+        editor.createBinding({
+          type: 'arrow',
+          fromId: shapeId,
+          toId: targetId,
+          props: {
+            terminal: 'end',
+            normalizedAnchor: { x: 0.5, y: 0.5 },
+            isExact: false,
+            isPrecise: false,
+          },
+        })
+      }
+    }
   }
 }
 

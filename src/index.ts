@@ -818,10 +818,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
           const totalW = els.reduce((s, e) => s + (e.width ?? 0), 0)
           const gap = (totalSpan - totalW) / (els.length - 1)
           let cur = first.x
-          for (const el of els) {
-            await updateElement(el.id, { x: cur })
-            cur += (el.width ?? 0) + gap
-          }
+          const updates = els.map((el) => { const x = cur; cur += (el.width ?? 0) + gap; return updateElement(el.id, { x }) })
+          await Promise.all(updates)
         } else {
           els.sort((a, b) => a.y - b.y)
           const first = els[0]!, last = els[els.length - 1]!
@@ -829,10 +827,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
           const totalH = els.reduce((s, e) => s + (e.height ?? 0), 0)
           const gap = (totalSpan - totalH) / (els.length - 1)
           let cur = first.y
-          for (const el of els) {
-            await updateElement(el.id, { y: cur })
-            cur += (el.height ?? 0) + gap
-          }
+          const updates = els.map((el) => { const y = cur; cur += (el.height ?? 0) + gap; return updateElement(el.id, { y }) })
+          await Promise.all(updates)
         }
 
         return { content: [{ type: 'text', text: `✅ Distributed ${els.length} elements (${direction})` }] }

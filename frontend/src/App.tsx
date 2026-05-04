@@ -44,7 +44,7 @@ type ServerMessage =
   | { type: 'elements_batch_created'; elements: CanvasElement[] }
   | { type: 'canvas_cleared' }
   | { type: 'viewport'; params: ViewportParams }
-  | { type: 'screenshot_request'; format: 'png' | 'svg'; background: boolean }
+  | { type: 'screenshot_request'; format: 'png' | 'svg'; background: boolean; requestId?: string }
 
 interface ViewportParams {
   scrollToContent?: boolean
@@ -170,14 +170,27 @@ function applyElement(editor: Editor, el: CanvasElement): void {
   const props = buildShapeProps(el)
 
   if (existing) {
-    editor.updateShape({
-      id: shapeId,
-      type: shapeType,
-      x: el.x,
-      y: el.y,
-      props,
-      isLocked: el.locked ?? false,
-    })
+    if (existing.type !== shapeType) {
+      // tldraw cannot change a shape's type in-place — delete and recreate
+      editor.deleteShapes([shapeId])
+      editor.createShape({
+        id: shapeId,
+        type: shapeType,
+        x: el.x,
+        y: el.y,
+        props,
+        isLocked: el.locked ?? false,
+      })
+    } else {
+      editor.updateShape({
+        id: shapeId,
+        type: shapeType,
+        x: el.x,
+        y: el.y,
+        props,
+        isLocked: el.locked ?? false,
+      })
+    }
   } else {
     editor.createShape({
       id: shapeId,
@@ -198,7 +211,7 @@ export function App() {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Screenshot handler ──────────────────────────────────────────────────────
-  const handleScreenshotRequest = useCallback(async (format: 'png' | 'svg', background: boolean) => {
+  const handleScreenshotRequest = useCallback(async (format: 'png' | 'svg', background: boolean, requestId?: string) => {
     const editor = editorRef.current
     const ws = wsRef.current
     if (!editor || !ws || ws.readyState !== WebSocket.OPEN) return
@@ -215,7 +228,7 @@ export function App() {
         const result = await editor.getSvgString([...shapeIds], { background })
         if (result) {
           const b64 = btoa(unescape(encodeURIComponent(result.svg)))
-          ws.send(JSON.stringify({ type: 'screenshot_result', format: 'svg', data: b64 }))
+          ws.send(JSON.stringify({ type: 'screenshot_result', format: 'svg', data: b64, requestId }))
         }
       } else {
         // toImage returns { blob, width, height }
@@ -225,7 +238,7 @@ export function App() {
           reader.onload = () => {
             const dataUrl = reader.result as string
             const b64 = dataUrl.split(',')[1] ?? ''
-            ws.send(JSON.stringify({ type: 'screenshot_result', format: 'png', data: b64 }))
+            ws.send(JSON.stringify({ type: 'screenshot_result', format: 'png', data: b64, requestId }))
           }
           reader.readAsDataURL(result.blob)
         }
@@ -312,7 +325,7 @@ export function App() {
         }
 
         case 'screenshot_request': {
-          handleScreenshotRequest(msg.format, msg.background)
+          handleScreenshotRequest(msg.format, msg.background, msg.requestId)
           break
         }
       }

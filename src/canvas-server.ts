@@ -68,8 +68,18 @@ wss.on('connection', (ws) => {
     try {
       const msg = JSON.parse(data.toString())
       if (msg.type === 'screenshot_result') {
-        screenshotResolvers.forEach((resolve) => resolve(msg))
-        screenshotResolvers.clear()
+        if (msg.requestId && screenshotResolvers.has(msg.requestId)) {
+          // Resolve the specific request by ID
+          screenshotResolvers.get(msg.requestId)!(msg)
+          screenshotResolvers.delete(msg.requestId)
+        } else {
+          // Fallback: resolve the oldest pending request (backwards-compat)
+          const first = screenshotResolvers.entries().next().value
+          if (first) {
+            first[1](msg)
+            screenshotResolvers.delete(first[0])
+          }
+        }
       }
     } catch {
       // ignore malformed messages
@@ -89,7 +99,8 @@ wss.on('connection', (ws) => {
 
 // ─── Screenshot Promise Registry ─────────────────────────────────────────────
 
-const screenshotResolvers = new Set<(result: { format: string; data: string }) => void>()
+/** Map of requestId → resolve fn. Prevents concurrent screenshot requests from cross-resolving. */
+const screenshotResolvers = new Map<string, (result: { format: string; data: string }) => void>()
 
 function requestScreenshot(format: 'png' | 'svg', background: boolean): Promise<{ format: string; data: string }> {
   return new Promise((resolve, reject) => {
@@ -97,18 +108,19 @@ function requestScreenshot(format: 'png' | 'svg', background: boolean): Promise<
       reject(new Error('No browser clients connected. Open the canvas in a browser first.'))
       return
     }
+    const requestId = Math.random().toString(36).slice(2)
     const timeout = setTimeout(() => {
-      screenshotResolvers.delete(resolve)
+      screenshotResolvers.delete(requestId)
       reject(new Error('Screenshot timeout: browser did not respond within 10s'))
     }, 10_000)
 
-    screenshotResolvers.add((result) => {
+    screenshotResolvers.set(requestId, (result) => {
       clearTimeout(timeout)
       resolve(result)
     })
 
-    // Ask the browser frontend to render and return image data
-    const payload = JSON.stringify({ type: 'screenshot_request', format, background })
+    // Ask the browser frontend to render and return image data (include requestId for correlation)
+    const payload = JSON.stringify({ type: 'screenshot_request', format, background, requestId })
     for (const client of wsClients) {
       if (client.readyState === WebSocket.OPEN) client.send(payload)
     }
@@ -159,10 +171,16 @@ app.get('/api/elements/search', (req: Request, res: Response) => {
   let results = Array.from(elements.values())
   const { type, x_min, x_max, y_min, y_max } = req.query as Record<string, string | undefined>
   if (type) results = results.filter((el) => el.type === type)
-  if (x_min !== undefined) results = results.filter((el) => el.x >= Number(x_min))
-  if (x_max !== undefined) results = results.filter((el) => el.x <= Number(x_max))
-  if (y_min !== undefined) results = results.filter((el) => el.y >= Number(y_min))
-  if (y_max !== undefined) results = results.filter((el) => el.y <= Number(y_max))
+  const toNum = (v: string | undefined): number | undefined => {
+    if (v === undefined) return undefined
+    const n = Number(v)
+    return isNaN(n) ? undefined : n
+  }
+  const xMin = toNum(x_min), xMax = toNum(x_max), yMin = toNum(y_min), yMax = toNum(y_max)
+  if (xMin !== undefined) results = results.filter((el) => el.x >= xMin)
+  if (xMax !== undefined) results = results.filter((el) => el.x <= xMax)
+  if (yMin !== undefined) results = results.filter((el) => el.y >= yMin)
+  if (yMax !== undefined) results = results.filter((el) => el.y <= yMax)
   res.json({ success: true, elements: results, count: results.length } satisfies ApiResponse)
 })
 
@@ -213,8 +231,9 @@ app.post('/api/elements/batch', (req: Request, res: Response) => {
   }
   const now = new Date().toISOString()
   const created: CanvasElement[] = []
+  let skipped = 0
   for (const raw of body.elements) {
-    if (!raw.type || raw.x === undefined || raw.y === undefined) continue
+    if (!raw.type || raw.x === undefined || raw.y === undefined) { skipped++; continue }
     const element: CanvasElement = {
       width: 160,
       height: 80,
@@ -234,7 +253,7 @@ app.post('/api/elements/batch', (req: Request, res: Response) => {
     created.push(element)
   }
   broadcast({ type: 'elements_batch_created', elements: created })
-  res.status(201).json({ success: true, elements: created, count: created.length } satisfies ApiResponse)
+  res.status(201).json({ success: true, elements: created, count: created.length, skipped } satisfies ApiResponse)
 })
 
 /** PUT /api/elements/:id — partial update */

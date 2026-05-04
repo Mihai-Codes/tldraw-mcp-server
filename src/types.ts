@@ -139,6 +139,7 @@ export interface ApiResponse {
   message?: string
   error?: string
   count?: number
+  skipped?: number
 }
 
 // ─── Utility ──────────────────────────────────────────────────────────────────

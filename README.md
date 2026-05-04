@@ -224,11 +224,23 @@ npm run dev:frontend # Vite dev server on :5173
 # Build everything
 npm run build:all
 
+# Run regression tests once
+npm test -- --run
+
 # Test MCP tools directly
 npx @modelcontextprotocol/inspector --cli \
   -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
   -- node dist/index.js --method tools/list
 ```
+
+### Testing
+
+```bash
+# Run the Vitest regression suite once
+npm test -- --run
+```
+
+The tests cover REST edge cases such as duplicate custom IDs, atomic batch create validation, and atomic batch updates.
 
 ### Testing a Tool
 
@@ -242,6 +254,12 @@ npx @modelcontextprotocol/inspector --cli \
   --tool-arg width=200 --tool-arg height=80 \
   --tool-arg text="Hello" --tool-arg color=blue --tool-arg fill=semi
 ```
+
+## Troubleshooting
+
+### Screenshot tools return an error
+
+`get_canvas_screenshot` requires a live browser client because screenshots are rendered by the tldraw frontend, not by the MCP stdio process. Start the canvas server with `npm run canvas`, open `http://127.0.0.1:3000` in a browser, wait for the canvas to load, then call the screenshot tool again.
 
 ---
 

@@ -541,7 +541,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         const params = BaseElementProps.parse(args)
         const { id: customId, ...rest } = params
         const el = await createElement({ ...rest, id: customId ?? generateId() } as Partial<CanvasElement>)
-        return { content: [{ type: 'text', text: `✅ Element created!\n\n${JSON.stringify(el, null, 2)}` }] }
+        return { content: [{ type: 'text', text: `Element created!\n\n${JSON.stringify(el, null, 2)}` }] }
       }
 
       case 'get_element': {
@@ -553,13 +553,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       case 'update_element': {
         const { id, ...updates } = BaseElementProps.partial().extend({ id: z.string() }).parse(args)
         const el = await updateElement(id, updates as Partial<CanvasElement>)
-        return { content: [{ type: 'text', text: `✅ Element updated!\n\n${JSON.stringify(el, null, 2)}` }] }
+        return { content: [{ type: 'text', text: `Element updated!\n\n${JSON.stringify(el, null, 2)}` }] }
       }
 
       case 'delete_element': {
         const { id } = z.object({ id: z.string() }).parse(args)
         await deleteElement(id)
-        return { content: [{ type: 'text', text: `✅ Element ${id} deleted.` }] }
+        return { content: [{ type: 'text', text: `Element ${id} deleted.` }] }
       }
 
       case 'query_elements': {
@@ -590,7 +590,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         const created = await batchCreateElements(payload)
         return {
           content: [
-            { type: 'text', text: `✅ ${created.length} element(s) created!\n\n${JSON.stringify(created, null, 2)}` },
+            { type: 'text', text: `${created.length} element(s) created!\n\n${JSON.stringify(created, null, 2)}` },
           ],
         }
       }
@@ -599,7 +599,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         const { confirm } = z.object({ confirm: z.boolean() }).parse(args)
         if (!confirm) return { content: [{ type: 'text', text: 'Clear cancelled — set confirm: true to proceed.' }] }
         await clearCanvas()
-        return { content: [{ type: 'text', text: '✅ Canvas cleared.' }] }
+        return { content: [{ type: 'text', text: 'Canvas cleared.' }] }
       }
 
       case 'read_diagram_guide': {
@@ -730,7 +730,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         return {
           content: [{
             type: 'text',
-            text: `✅ Imported ${created.length} elements (mode: ${mode})`,
+            text: `Imported ${created.length} elements (mode: ${mode})`,
           }],
         }
       }
@@ -747,7 +747,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         return {
           content: [{
             type: 'text',
-            text: `✅ Snapshot "${json.name}" saved (${json.elementCount} elements, ${json.createdAt})`,
+            text: `Snapshot "${json.name}" saved (${json.elementCount} elements, ${json.createdAt})`,
           }],
         }
       }
@@ -763,7 +763,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         return {
           content: [{
             type: 'text',
-            text: `✅ Snapshot "${name}" restored (${created.length} elements)`,
+            text: `Snapshot "${name}" restored (${created.length} elements)`,
           }],
         }
       }
@@ -779,7 +779,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         }).parse(args ?? {})
         const res = await canvasFetch('/api/viewport', { method: 'POST', body: JSON.stringify(params) })
         if (!res.ok) throw new Error(`Viewport command failed: ${res.status}`)
-        return { content: [{ type: 'text', text: '✅ Viewport updated.' }] }
+        return { content: [{ type: 'text', text: 'Viewport updated.' }] }
       }
 
       // ── align_elements ──────────────────────────────────────────────────────
@@ -807,7 +807,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         }
 
         await batchUpdateElements(els.map((el) => ({ id: el.id, changes: getCoord!(el) })))
-        return { content: [{ type: 'text', text: `✅ Aligned ${els.length} elements (${alignment})` }] }
+        return { content: [{ type: 'text', text: `Aligned ${els.length} elements (${alignment})` }] }
       }
 
       // ── distribute_elements ─────────────────────────────────────────────────
@@ -841,7 +841,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
           await batchUpdateElements(updates)
         }
 
-        return { content: [{ type: 'text', text: `✅ Distributed ${els.length} elements (${direction})` }] }
+        return { content: [{ type: 'text', text: `Distributed ${els.length} elements (${direction})` }] }
       }
 
       default:
@@ -851,7 +851,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
     const message = err instanceof z.ZodError
       ? `Invalid arguments: ${err.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ')}`
       : (err as Error).message
-    return { content: [{ type: 'text', text: `❌ Error: ${message}` }], isError: true }
+    return { content: [{ type: 'text', text: `Error: ${message}` }], isError: true }
   }
 })
 

@@ -143,18 +143,18 @@ These changes landed in tldraw v4.x and are **already handled** in `frontend/src
 Arrow labels were the last shape type still using plain `text`. In v4.0 they joined geo/text/note:
 
 ```typescript
-// ✅ Correct — all shapes now use richText
+// Correct: all shapes use richText
 props: { richText: toRichText('my label') }
 
-// ❌ Wrong — was valid in v3, breaks in v4
+// Incorrect: valid in v3, breaks in v4
 props: { text: 'my label' }
 ```
 
 ### v4.0 — CSS variables renamed to `--tl-` prefix
 All tldraw CSS custom properties now start with `--tl-`. If you add custom CSS:
 ```css
-/* ✅ v4 */  --tl-color-background: white;
-/* ❌ v3 */  --color-background: white;
+/* Correct in v4 */    --tl-color-background: white;
+/* Incorrect in v3 */  --color-background: white;
 ```
 
 ### v4.2 — TipTap upgraded from v2 → v3
@@ -166,7 +166,7 @@ Our `toRichText()` helper generates plain ProseMirror doc JSON (no TipTap-specif
 ### v4.3 — Custom shape type declaration pattern changed (TypeScript only)
 Runtime behavior unchanged — TypeScript only. Use module augmentation instead of `TLBaseShape`:
 ```typescript
-// ✅ v4.3+
+// Correct: v4.3+
 declare module 'tldraw' {
   export interface TLGlobalShapePropsMap {
     'my-shape': { w: number; h: number }
@@ -174,17 +174,17 @@ declare module 'tldraw' {
 }
 type MyShape = TLShape<'my-shape'>
 
-// ❌ v4.2 and below
+// Incorrect: v4.2 and below
 type MyShape = TLBaseShape<'my-shape', { w: number; h: number }>
 ```
 
 ### v4.4 — `options` prop consolidates `cameraOptions`/`textOptions`/`deepLinks`
 The standalone props are deprecated (still work). Prefer `options={{}}` going forward:
 ```tsx
-// ✅ v4.4+ preferred
+// Correct: v4.4+ preferred
 <Tldraw options={{ camera: { isLocked: true }, deepLinks: true }} />
 
-// 🔜 deprecated but still works
+// Deprecated but still works
 <Tldraw cameraOptions={{ isLocked: true }} deepLinks />
 ```
 
@@ -204,10 +204,10 @@ These were introduced in tldraw v3.10–v3.13 and are **already handled** in `fr
 tldraw validates `opacity` at the shape level alongside `x`, `y`, `isLocked`. Putting it inside `props` causes a `ValidationError: Unexpected property`.
 
 ```typescript
-// ✅ Correct
+// Correct
 editor.createShape({ id, type, x, y, opacity: 0.9, props: { color: 'blue', ... } })
 
-// ❌ Wrong — causes ValidationError
+// Incorrect: causes ValidationError
 editor.createShape({ id, type, x, y, props: { color: 'blue', opacity: 0.9, ... } })
 ```
 
@@ -215,10 +215,10 @@ editor.createShape({ id, type, x, y, props: { color: 'blue', opacity: 0.9, ... }
 The `text` string prop was removed from `geo`, `text`, and `note` shapes. Use `richText` with TipTap/ProseMirror JSON instead. **Arrow shapes still use plain `text` strings.**
 
 ```typescript
-// ✅ Correct — geo, text, note shapes
+// Correct — geo, text, note shapes
 props: { richText: toRichText('Hello\nWorld') }
 
-// ❌ Wrong — causes ValidationError: Unexpected property
+// Incorrect: causes ValidationError: Unexpected property
 props: { text: 'Hello' }
 ```
 
@@ -231,7 +231,7 @@ The `toRichText()` helper in `App.tsx` converts plain strings (including `\n`) t
 Arrow `props.start` and `props.end` are now plain `{ x: number, y: number }` vectors. Connections to other shapes are **separate binding records** created via `editor.createBinding()`.
 
 ```typescript
-// ✅ Correct — v3 way
+// Correct — v3 way
 editor.createShape({ ..., props: { start: { x: 0, y: 0 }, end: { x: 200, y: 0 }, ... } })
 editor.createBinding({
   type: 'arrow',
@@ -240,7 +240,7 @@ editor.createBinding({
   props: { terminal: 'start', normalizedAnchor: { x: 0.5, y: 0.5 }, isExact: false, isPrecise: false }
 })
 
-// ❌ Wrong — v2-style, causes ValidationError: Expected number, got undefined
+// Incorrect: v2-style, causes ValidationError: Expected number, got undefined
 props: { start: { type: 'binding', boundShapeId: '...', normalizedAnchor: ... } }
 ```
 

@@ -1,7 +1,14 @@
 # tldraw MCP Server
 
-> Programmatic canvas toolkit for AI agents — create, read, update, and delete tldraw shapes in real time via the Model Context Protocol.
+> Programmatic canvas toolkit for AI agents - create, read, update, and delete tldraw shapes in real time via the Model Context Protocol.
 
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![tldraw](https://img.shields.io/badge/tldraw-4.5-000000)](https://tldraw.dev/)
+[![MCP](https://img.shields.io/badge/Model_Context_Protocol-Server-5E5CE6)](https://modelcontextprotocol.io/)
+[![Express](https://img.shields.io/badge/Express-4.21-000000?logo=express&logoColor=white)](https://expressjs.com/)
+[![WebSocket](https://img.shields.io/badge/WebSocket-ws_8.18-010101)](https://github.com/websockets/ws)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## What It Is
@@ -134,7 +141,7 @@ codex mcp add tldraw \
 
 ## MCP Tools
 
-### ✅ Implemented (17 tools)
+### Implemented (17 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -156,7 +163,7 @@ codex mcp add tldraw \
 | `align_elements` | Align multiple elements using an atomic batch update |
 | `distribute_elements` | Distribute multiple elements evenly using an atomic batch update |
 
-### 🗺️ Roadmap
+### Roadmap
 
 | Category | Tools | Status |
 |----------|-------|--------|

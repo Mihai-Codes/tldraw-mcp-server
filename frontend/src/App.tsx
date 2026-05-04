@@ -118,21 +118,45 @@ function buildShapeProps(el: CanvasElement): Record<string, unknown> {
     }
   }
 
-  if (el.type === 'arrow' || el.type === 'line') {
+  if (el.type === 'arrow') {
     const pts = el.points
     const last = pts ? pts[pts.length - 1] : null
-    const props: Record<string, unknown> = {
+    return {
       ...base,
+      labelColor: color,
+      fill: el.fill ?? 'none',
       dash: el.dash ?? 'draw',
       size: el.size ?? 'm',
       arrowheadStart: el.startArrowhead ?? 'none',
-      arrowheadEnd: el.endArrowhead ?? (el.type === 'arrow' ? 'arrow' : 'none'),
-      richText: toRichText(el.text ?? ''),
+      arrowheadEnd: el.endArrowhead ?? 'arrow',
       font: el.font ?? 'draw',
+      kind: 'arc',
       start: { x: 0, y: 0 },
       end: last ? { x: last[0], y: last[1] } : { x: (el.endX ?? el.x + 200) - el.x, y: (el.endY ?? el.y) - el.y },
+      bend: 0,
+      richText: toRichText(el.text ?? ''),
+      labelPosition: 0.5,
+      scale: 1,
+      elbowMidPoint: 0.5,
     }
-    return props
+  }
+
+  if (el.type === 'line') {
+    const pts = el.points && el.points.length >= 2 ? el.points : [[0, 0], [(el.endX ?? el.x + 200) - el.x, (el.endY ?? el.y) - el.y]]
+    const points = Object.fromEntries(
+      pts.map(([x, y], i) => {
+        const id = i === 0 ? 'start' : i === pts.length - 1 ? 'end' : `point:${i}`
+        return [id, { id, index: `a${i + 1}`, x, y }]
+      })
+    )
+    return {
+      ...base,
+      dash: el.dash ?? 'draw',
+      size: el.size ?? 'm',
+      spline: 'line',
+      points,
+      scale: 1,
+    }
   }
 
   if (el.type === 'frame') {
@@ -212,8 +236,8 @@ function applyElement(editor: Editor, el: CanvasElement): void {
     })
   }
 
-  // tldraw v3: arrow bindings are separate records, not embedded in props
-  if (el.type === 'arrow' || el.type === 'line') {
+  // tldraw v3+: arrow bindings are separate records, not embedded in props
+  if (el.type === 'arrow') {
     // Remove any existing bindings for this arrow
     const existingBindings = editor.getBindingsFromShape(shapeId, 'arrow')
     for (const b of existingBindings) {

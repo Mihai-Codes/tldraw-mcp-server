@@ -1,0 +1,54 @@
+{
+  "name": "tldraw-mcp-server",
+  "version": "0.1.0",
+  "description": "The most comprehensive MCP server for tldraw — programmatic canvas toolkit for AI agents",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "canvas": "node dist/canvas-server.js",
+    "dev": "tsx watch src/index.ts",
+    "dev:canvas": "tsx watch src/canvas-server.ts",
+    "type-check": "tsc --noEmit",
+    "test": "vitest",
+    "test:bind": "node scripts/test-bind.cjs"
+  },
+  "keywords": [
+    "tldraw",
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "canvas",
+    "diagram",
+    "whiteboard",
+    "agent",
+    "adal",
+    "claude",
+    "cursor"
+  ],
+  "author": "Mihai-Alexandru Chindriș",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chindris-mihai-alexandru/tldraw-mcp-server.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "express": "^4.21.0",
+    "ws": "^8.18.0",
+    "tldraw": "^3.0.0",
+    "@tldraw/store": "^3.0.0",
+    "@tldraw/tlschema": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

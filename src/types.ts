@@ -115,11 +115,13 @@ export type WSMessageFromServer =
   | { type: 'element_updated'; element: CanvasElement }
   | { type: 'element_deleted'; id: string }
   | { type: 'elements_batch_created'; elements: CanvasElement[] }
+  | { type: 'elements_batch_updated'; elements: CanvasElement[] }
   | { type: 'canvas_cleared' }
   | { type: 'viewport'; params: ViewportParams }
+  | { type: 'screenshot_request'; format: 'png' | 'svg'; background: boolean; requestId: string }
 
 export type WSMessageFromClient =
-  | { type: 'screenshot_result'; format: 'png' | 'svg'; data: string }
+  | { type: 'screenshot_result'; format: 'png' | 'svg'; data: string; requestId?: string; error?: string }
   | { type: 'ping' }
 
 export interface ViewportParams {
@@ -139,7 +141,6 @@ export interface ApiResponse {
   message?: string
   error?: string
   count?: number
-  skipped?: number
 }
 
 // ─── Utility ──────────────────────────────────────────────────────────────────

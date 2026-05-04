@@ -134,7 +134,7 @@ codex mcp add tldraw \
 
 ## MCP Tools
 
-### ✅ Implemented (8 tools)
+### ✅ Implemented (17 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -146,16 +146,21 @@ codex mcp add tldraw \
 | `batch_create_elements` | Create multiple elements atomically (efficient for diagrams) |
 | `clear_canvas` | Remove all elements (requires `confirm: true`) |
 | `read_diagram_guide` | Return tldraw color names, presets, and layout best practices |
+| `describe_scene` | Summarize the current canvas elements, positions, labels, and connections |
+| `get_canvas_screenshot` | Capture a PNG screenshot from the live browser canvas |
+| `export_scene` | Export all elements as a JSON snapshot |
+| `import_scene` | Import a JSON scene in replace or merge mode |
+| `snapshot_scene` | Save the current canvas as a named in-memory snapshot |
+| `restore_snapshot` | Restore a previously saved named snapshot |
+| `set_viewport` | Zoom, pan, zoom-to-fit, or center on a specific element |
+| `align_elements` | Align multiple elements using an atomic batch update |
+| `distribute_elements` | Distribute multiple elements evenly using an atomic batch update |
 
 ### 🗺️ Roadmap
 
 | Category | Tools | Status |
 |----------|-------|--------|
-| **Layout** | `align_elements`, `distribute_elements`, `group_elements`, `ungroup_elements` | Planned |
-| **Scene Awareness** | `describe_scene`, `get_canvas_screenshot` | Planned |
-| **File I/O** | `export_scene`, `import_scene`, `export_to_image` | Planned |
-| **State Management** | `snapshot_scene`, `restore_snapshot` | Planned |
-| **Viewport** | `set_viewport` | Planned |
+| **Grouping** | `group_elements`, `ungroup_elements` | Planned |
 
 ---
 
@@ -181,7 +186,7 @@ codex mcp add tldraw \
 ┌─────────────────────┐         ┌─────────────────────────┐
 │   MCP Client        │  stdio  │   MCP Server             │
 │   AdaL, Claude,     │◀───────▶│   src/index.ts           │
-│   Cursor, etc.      │         │   8 tools · Zod validate │
+│   Cursor, etc.      │         │   17 tools · Zod validate│
 └─────────────────────┘         └────────────┬────────────┘
                                              │ HTTP REST
                                              ▼

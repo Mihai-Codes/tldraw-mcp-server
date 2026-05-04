@@ -16,6 +16,7 @@ import {
   CanvasElement,
   ApiResponse,
   WSMessageFromServer,
+  WSMessageFromClient,
   ViewportParams,
   generateId,
 } from './types.js'
@@ -66,19 +67,18 @@ wss.on('connection', (ws) => {
 
   ws.on('message', (data) => {
     try {
-      const msg = JSON.parse(data.toString())
-      if (msg.type === 'screenshot_result') {
-        if (msg.requestId && screenshotResolvers.has(msg.requestId)) {
-          // Resolve the specific request by ID
-          screenshotResolvers.get(msg.requestId)!(msg)
-          screenshotResolvers.delete(msg.requestId)
+      const msg = JSON.parse(data.toString()) as WSMessageFromClient
+      if (msg.type === 'screenshot_result' && msg.requestId) {
+        const pending = screenshotRequests.get(msg.requestId)
+        if (!pending) return
+
+        clearTimeout(pending.timeout)
+        screenshotRequests.delete(msg.requestId)
+
+        if (msg.error) {
+          pending.reject(new Error(`Screenshot failed: ${msg.error}`))
         } else {
-          // Fallback: resolve the oldest pending request (backwards-compat)
-          const first = screenshotResolvers.entries().next().value
-          if (first) {
-            first[1](msg)
-            screenshotResolvers.delete(first[0])
-          }
+          pending.resolve({ format: msg.format, data: msg.data })
         }
       }
     } catch {
@@ -99,28 +99,33 @@ wss.on('connection', (ws) => {
 
 // ─── Screenshot Promise Registry ─────────────────────────────────────────────
 
-/** Map of requestId → resolve fn. Prevents concurrent screenshot requests from cross-resolving. */
-const screenshotResolvers = new Map<string, (result: { format: string; data: string }) => void>()
+type ScreenshotResult = { format: 'png' | 'svg'; data: string }
 
-function requestScreenshot(format: 'png' | 'svg', background: boolean): Promise<{ format: string; data: string }> {
+type PendingScreenshotRequest = {
+  resolve: (result: ScreenshotResult) => void
+  reject: (err: Error) => void
+  timeout: ReturnType<typeof setTimeout>
+}
+
+/** Map of requestId → pending screenshot request. Prevents concurrent requests from cross-resolving. */
+const screenshotRequests = new Map<string, PendingScreenshotRequest>()
+
+function requestScreenshot(format: 'png' | 'svg', background: boolean): Promise<ScreenshotResult> {
   return new Promise((resolve, reject) => {
     if (wsClients.size === 0) {
       reject(new Error('No browser clients connected. Open the canvas in a browser first.'))
       return
     }
-    const requestId = Math.random().toString(36).slice(2)
+    const requestId = generateId()
     const timeout = setTimeout(() => {
-      screenshotResolvers.delete(requestId)
+      screenshotRequests.delete(requestId)
       reject(new Error('Screenshot timeout: browser did not respond within 10s'))
     }, 10_000)
 
-    screenshotResolvers.set(requestId, (result) => {
-      clearTimeout(timeout)
-      resolve(result)
-    })
+    screenshotRequests.set(requestId, { resolve, reject, timeout })
 
     // Ask the browser frontend to render and return image data (include requestId for correlation)
-    const payload = JSON.stringify({ type: 'screenshot_request', format, background, requestId })
+    const payload = JSON.stringify({ type: 'screenshot_request', format, background, requestId } satisfies WSMessageFromServer)
     for (const client of wsClients) {
       if (client.readyState === WebSocket.OPEN) client.send(payload)
     }
@@ -201,6 +206,12 @@ app.post('/api/elements', (req: Request, res: Response) => {
     res.status(400).json({ success: false, error: 'type, x, y are required' } satisfies ApiResponse)
     return
   }
+  const id = body.id || generateId()
+  if (elements.has(id)) {
+    res.status(409).json({ success: false, error: `Element ${id} already exists` } satisfies ApiResponse)
+    return
+  }
+
   const now = new Date().toISOString()
   const element: CanvasElement = {
     width: 160,
@@ -212,7 +223,7 @@ app.post('/api/elements', (req: Request, res: Response) => {
     font: 'draw',
     opacity: 100,
     ...body,
-    id: body.id || generateId(),
+    id,
     createdAt: now,
     updatedAt: now,
     version: 1,
@@ -229,31 +240,83 @@ app.post('/api/elements/batch', (req: Request, res: Response) => {
     res.status(400).json({ success: false, error: '`elements` array required' } satisfies ApiResponse)
     return
   }
-  const now = new Date().toISOString()
-  const created: CanvasElement[] = []
-  let skipped = 0
-  for (const raw of body.elements) {
-    if (!raw.type || raw.x === undefined || raw.y === undefined) { skipped++; continue }
-    const element: CanvasElement = {
-      width: 160,
-      height: 80,
-      color: 'black',
-      fill: 'none',
-      dash: 'draw',
-      size: 'm',
-      font: 'draw',
-      opacity: 100,
-      ...raw,
-      id: raw.id || generateId(),
-      createdAt: now,
-      updatedAt: now,
-      version: 1,
-    } as CanvasElement
-    elements.set(element.id, element)
-    created.push(element)
+
+  const invalidIndex = body.elements.findIndex((raw) => !raw.type || raw.x === undefined || raw.y === undefined)
+  if (invalidIndex !== -1) {
+    res.status(400).json({
+      success: false,
+      error: `Invalid element at index ${invalidIndex}: type, x, y are required`,
+    } satisfies ApiResponse)
+    return
   }
+
+  const ids = body.elements.map((raw) => raw.id || generateId())
+  const conflictingId = ids.find((id, index) => elements.has(id) || ids.indexOf(id) !== index)
+  if (conflictingId) {
+    res.status(409).json({ success: false, error: `Element ${conflictingId} already exists` } satisfies ApiResponse)
+    return
+  }
+
+  const now = new Date().toISOString()
+  const created: CanvasElement[] = body.elements.map((raw, index) => ({
+    width: 160,
+    height: 80,
+    color: 'black',
+    fill: 'none',
+    dash: 'draw',
+    size: 'm',
+    font: 'draw',
+    opacity: 100,
+    ...raw,
+    id: ids[index]!,
+    createdAt: now,
+    updatedAt: now,
+    version: 1,
+  } as CanvasElement))
+
+  for (const element of created) elements.set(element.id, element)
+
   broadcast({ type: 'elements_batch_created', elements: created })
-  res.status(201).json({ success: true, elements: created, count: created.length, skipped } satisfies ApiResponse)
+  res.status(201).json({ success: true, elements: created, count: created.length } satisfies ApiResponse)
+})
+
+/** PUT /api/elements/batch — partial update multiple elements atomically */
+app.put('/api/elements/batch', (req: Request, res: Response) => {
+  const body = req.body as { updates?: Array<{ id?: string; changes?: Partial<CanvasElement> }> }
+  if (!Array.isArray(body.updates)) {
+    res.status(400).json({ success: false, error: '`updates` array required' } satisfies ApiResponse)
+    return
+  }
+
+  const missingIdIndex = body.updates.findIndex((item) => !item.id)
+  if (missingIdIndex !== -1) {
+    res.status(400).json({ success: false, error: `Update at index ${missingIdIndex} is missing id` } satisfies ApiResponse)
+    return
+  }
+
+  const missing = body.updates.find((item) => !elements.has(item.id as string))
+  if (missing) {
+    res.status(404).json({ success: false, error: `Element ${missing.id} not found` } satisfies ApiResponse)
+    return
+  }
+
+  const now = new Date().toISOString()
+  const updated: CanvasElement[] = body.updates.map((item) => {
+    const existing = elements.get(item.id as string)!
+    return {
+      ...existing,
+      ...(item.changes ?? {}),
+      id: existing.id,
+      createdAt: existing.createdAt,
+      updatedAt: now,
+      version: existing.version + 1,
+    }
+  })
+
+  for (const element of updated) elements.set(element.id, element)
+
+  broadcast({ type: 'elements_batch_updated', elements: updated })
+  res.json({ success: true, elements: updated, count: updated.length } satisfies ApiResponse)
 })
 
 /** PUT /api/elements/:id — partial update */
@@ -356,9 +419,11 @@ app.get('*', (req: Request, res: Response) => {
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 
-httpServer.listen(PORT, HOST, () => {
-  console.log(`tldraw canvas server running at http://${HOST}:${PORT}`)
-  console.log(`WebSocket endpoint: ws://${HOST}:${PORT}/ws`)
-})
+if (process.env.NODE_ENV !== 'test') {
+  httpServer.listen(PORT, HOST, () => {
+    console.log(`tldraw canvas server running at http://${HOST}:${PORT}`)
+    console.log(`WebSocket endpoint: ws://${HOST}:${PORT}/ws`)
+  })
+}
 
 export { app, httpServer, wss, elements, broadcast }

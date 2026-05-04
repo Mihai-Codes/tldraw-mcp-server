@@ -15,7 +15,7 @@ An MCP (Model Context Protocol) server that gives AI agents programmatic control
 ```
 tldraw-mcp-server/
 ├── src/
-│   ├── index.ts          # MCP server entry point — 8 tools, Zod schemas
+│   ├── index.ts          # MCP server entry point — 17 tools, Zod schemas
 │   ├── canvas-server.ts  # Express + WebSocket canvas server — REST CRUD + snapshot
 │   └── types.ts          # Shared types: CanvasElement, WSMessage, ApiResponse, generateId
 ├── frontend/
@@ -36,7 +36,7 @@ tldraw-mcp-server/
 ## Key Design Decisions
 
 - **Relative path in `.mcp.json`**: `args: ["dist/index.js"]` — works when AdaL/Claude is opened from the project root. For global installs use absolute path.
-- **Route ordering matters**: `DELETE /api/elements/clear` must be registered BEFORE `DELETE /api/elements/:id` (Express matches first).
+- **Route ordering matters**: specific routes such as `PUT /api/elements/batch` and `DELETE /api/elements/clear` must be registered BEFORE parameter routes like `PUT /api/elements/:id` and `DELETE /api/elements/:id` (Express matches first).
 - **Geo shapes**: tldraw uses a single `geo` shape type for rectangle, ellipse, diamond, triangle, star, cloud, hexagon — the `geo` prop selects the variant. The frontend `toTldrawType()` maps all these to `"geo"`.
 - **Arrow bindings**: Use `startElementId`/`endElementId` in the API. The frontend converts these to tldraw's `{ type: 'binding', boundShapeId }` format.
 - **WebSocket broadcast**: Every REST mutation calls `broadcast()` immediately — the browser reacts within one event loop tick.
@@ -65,6 +65,7 @@ tldraw-mcp-server/
 | `GET` | `/api/elements/:id` | Get one |
 | `POST` | `/api/elements` | Create one (`type`, `x`, `y` required) |
 | `POST` | `/api/elements/batch` | Create many (`{ elements: [...] }`) |
+| `PUT` | `/api/elements/batch` | Atomic partial update for many elements (`{ updates: [{ id, changes }] }`) |
 | `PUT` | `/api/elements/:id` | Partial update |
 | `DELETE` | `/api/elements/clear` | Wipe all |
 | `DELETE` | `/api/elements/:id` | Delete one |
@@ -81,12 +82,13 @@ Server → Browser:
 - `{ type: 'element_updated', element }`
 - `{ type: 'element_deleted', id }`
 - `{ type: 'elements_batch_created', elements }`
+- `{ type: 'elements_batch_updated', elements }`
 - `{ type: 'canvas_cleared' }`
 - `{ type: 'viewport', params }` — zoom/scroll commands
-- `{ type: 'screenshot_request', format, background }` — ask browser to render
+- `{ type: 'screenshot_request', format, background, requestId }` — ask browser to render
 
 Browser → Server:
-- `{ type: 'screenshot_result', format, data }` — base64 image data
+- `{ type: 'screenshot_result', format, data, requestId, error? }` — base64 image data or error correlated by request ID
 
 ## Common Tasks
 

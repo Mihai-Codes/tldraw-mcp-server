@@ -43,7 +43,7 @@ async function createElement(data: Partial<CanvasElement>): Promise<CanvasElemen
 }
 
 async function getElement(id: string): Promise<CanvasElement> {
-  const res = await canvasFetch(`/api/elements/${id}`)
+  const res = await canvasFetch(`/api/elements/${encodeURIComponent(id)}`)
   const json = (await res.json()) as ApiResponse
   if (!res.ok || !json.success || !json.element)
     throw new Error(json.error ?? `Element ${id} not found`)
@@ -51,15 +51,25 @@ async function getElement(id: string): Promise<CanvasElement> {
 }
 
 async function updateElement(id: string, updates: Partial<CanvasElement>): Promise<CanvasElement> {
-  const res = await canvasFetch(`/api/elements/${id}`, { method: 'PUT', body: JSON.stringify(updates) })
+  const res = await canvasFetch(`/api/elements/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(updates) })
   const json = (await res.json()) as ApiResponse
   if (!res.ok || !json.success || !json.element)
     throw new Error(json.error ?? `Update failed: ${res.status}`)
   return json.element
 }
 
+async function batchUpdateElements(updates: Array<{ id: string; changes: Partial<CanvasElement> }>): Promise<CanvasElement[]> {
+  const res = await canvasFetch('/api/elements/batch', {
+    method: 'PUT',
+    body: JSON.stringify({ updates }),
+  })
+  const json = (await res.json()) as ApiResponse
+  if (!res.ok || !json.success) throw new Error(json.error ?? `Batch update failed: ${res.status}`)
+  return json.elements ?? []
+}
+
 async function deleteElement(id: string): Promise<void> {
-  const res = await canvasFetch(`/api/elements/${id}`, { method: 'DELETE' })
+  const res = await canvasFetch(`/api/elements/${encodeURIComponent(id)}`, { method: 'DELETE' })
   const json = (await res.json()) as ApiResponse
   if (!res.ok || !json.success) throw new Error(json.error ?? `Delete failed: ${res.status}`)
 }
@@ -796,7 +806,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
           case 'middle': { const v = els.reduce((s, e) => s + e.y + (e.height ?? 0) / 2, 0) / els.length; getCoord = (e) => ({ y: v - (e.height ?? 0) / 2 }); break }
         }
 
-        await Promise.all(els.map((el) => updateElement(el.id, getCoord!(el))))
+        await batchUpdateElements(els.map((el) => ({ id: el.id, changes: getCoord!(el) })))
         return { content: [{ type: 'text', text: `✅ Aligned ${els.length} elements (${alignment})` }] }
       }
 
@@ -818,8 +828,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
           const totalW = els.reduce((s, e) => s + (e.width ?? 0), 0)
           const gap = (totalSpan - totalW) / (els.length - 1)
           let cur = first.x
-          const updates = els.map((el) => { const x = cur; cur += (el.width ?? 0) + gap; return updateElement(el.id, { x }) })
-          await Promise.all(updates)
+          const updates = els.map((el) => { const x = cur; cur += (el.width ?? 0) + gap; return { id: el.id, changes: { x } } })
+          await batchUpdateElements(updates)
         } else {
           els.sort((a, b) => a.y - b.y)
           const first = els[0]!, last = els[els.length - 1]!
@@ -827,8 +837,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
           const totalH = els.reduce((s, e) => s + (e.height ?? 0), 0)
           const gap = (totalSpan - totalH) / (els.length - 1)
           let cur = first.y
-          const updates = els.map((el) => { const y = cur; cur += (el.height ?? 0) + gap; return updateElement(el.id, { y }) })
-          await Promise.all(updates)
+          const updates = els.map((el) => { const y = cur; cur += (el.height ?? 0) + gap; return { id: el.id, changes: { y } } })
+          await batchUpdateElements(updates)
         }
 
         return { content: [{ type: 'text', text: `✅ Distributed ${els.length} elements (${direction})` }] }

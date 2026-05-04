@@ -42,9 +42,10 @@ type ServerMessage =
   | { type: 'element_updated'; element: CanvasElement }
   | { type: 'element_deleted'; id: string }
   | { type: 'elements_batch_created'; elements: CanvasElement[] }
+  | { type: 'elements_batch_updated'; elements: CanvasElement[] }
   | { type: 'canvas_cleared' }
   | { type: 'viewport'; params: ViewportParams }
-  | { type: 'screenshot_request'; format: 'png' | 'svg'; background: boolean; requestId?: string }
+  | { type: 'screenshot_request'; format: 'png' | 'svg'; background: boolean; requestId: string }
 
 interface ViewportParams {
   scrollToContent?: boolean
@@ -220,7 +221,7 @@ export function App() {
       // Export all shapes to an image blob
       const shapeIds = editor.getCurrentPageShapeIds()
       if (shapeIds.size === 0) {
-        ws.send(JSON.stringify({ type: 'screenshot_result', format, data: '' }))
+        ws.send(JSON.stringify({ type: 'screenshot_result', format, data: '', requestId }))
         return
       }
 
@@ -240,11 +241,23 @@ export function App() {
             const b64 = dataUrl.split(',')[1] ?? ''
             ws.send(JSON.stringify({ type: 'screenshot_result', format: 'png', data: b64, requestId }))
           }
+          reader.onerror = () => {
+            ws.send(JSON.stringify({ type: 'screenshot_result', format, data: '', requestId, error: 'Failed to read image blob' }))
+          }
           reader.readAsDataURL(result.blob)
+        } else {
+          ws.send(JSON.stringify({ type: 'screenshot_result', format, data: '', requestId, error: 'No image result returned' }))
         }
       }
     } catch (err) {
       console.error('[screenshot] failed:', err)
+      ws.send(JSON.stringify({
+        type: 'screenshot_result',
+        format,
+        data: '',
+        requestId,
+        error: err instanceof Error ? err.message : 'Unknown screenshot error',
+      }))
     }
   }, [])
 
@@ -294,7 +307,8 @@ export function App() {
           break
         }
 
-        case 'elements_batch_created': {
+        case 'elements_batch_created':
+        case 'elements_batch_updated': {
           editor.run(() => {
             for (const el of msg.elements) applyElement(editor, el)
           }, { history: 'ignore' })

@@ -134,3 +134,54 @@ npm run build:all    # backend + frontend
 - `satisfies ApiResponse` type assertions in canvas-server — keep these, they catch response shape bugs at compile time
 - `process.env.NODE_DISABLE_COLORS = '1'` at the top of `src/index.ts` — ANSI codes break JSON stdio parsing
 - `{ history: 'ignore' }` in all `editor.run()` calls in App.tsx — prevents WS mutations from appearing in undo history
+
+## tldraw v3 Breaking Changes (v3.10+)
+
+These were introduced in tldraw v3.10–v3.13 and are **already handled** in `frontend/src/App.tsx`. Do not revert them.
+
+### 1. `opacity` is a top-level shape property (not inside `props`)
+tldraw validates `opacity` at the shape level alongside `x`, `y`, `isLocked`. Putting it inside `props` causes a `ValidationError: Unexpected property`.
+
+```typescript
+// ✅ Correct
+editor.createShape({ id, type, x, y, opacity: 0.9, props: { color: 'blue', ... } })
+
+// ❌ Wrong — causes ValidationError
+editor.createShape({ id, type, x, y, props: { color: 'blue', opacity: 0.9, ... } })
+```
+
+### 2. `text` → `richText` on geo / text / note shapes (v3.10)
+The `text` string prop was removed from `geo`, `text`, and `note` shapes. Use `richText` with TipTap/ProseMirror JSON instead. **Arrow shapes still use plain `text` strings.**
+
+```typescript
+// ✅ Correct — geo, text, note shapes
+props: { richText: toRichText('Hello\nWorld') }
+
+// ❌ Wrong — causes ValidationError: Unexpected property
+props: { text: 'Hello' }
+```
+
+The `toRichText()` helper in `App.tsx` converts plain strings (including `\n`) to the required TipTap doc format:
+```typescript
+{ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '...' }] }] }
+```
+
+### 3. Arrow bindings are separate records, not embedded in `props` (v3.10)
+Arrow `props.start` and `props.end` are now plain `{ x: number, y: number }` vectors. Connections to other shapes are **separate binding records** created via `editor.createBinding()`.
+
+```typescript
+// ✅ Correct — v3 way
+editor.createShape({ ..., props: { start: { x: 0, y: 0 }, end: { x: 200, y: 0 }, ... } })
+editor.createBinding({
+  type: 'arrow',
+  fromId: arrowShapeId,
+  toId: targetShapeId,
+  props: { terminal: 'start', normalizedAnchor: { x: 0.5, y: 0.5 }, isExact: false, isPrecise: false }
+})
+
+// ❌ Wrong — v2-style, causes ValidationError: Expected number, got undefined
+props: { start: { type: 'binding', boundShapeId: '...', normalizedAnchor: ... } }
+```
+
+### 4. Elbow arrows (v3.13)
+Arrow shapes gained a `kind` prop (`'arc'` | `'elbow'`) and `elbowMidPoint`. The `buildShapeProps()` function doesn't set these — tldraw fills in defaults — so no action needed unless you want elbow-style arrows. If you create arrows and see `kind` validation errors, pass `kind: 'arc'` explicitly.

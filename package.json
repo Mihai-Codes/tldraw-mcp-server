@@ -6,9 +6,12 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
+    "build:frontend": "cd frontend && npm install && npm run build",
+    "build:all": "npm run build && npm run build:frontend",
     "canvas": "node dist/canvas-server.js",
     "dev": "tsx watch src/index.ts",
     "dev:canvas": "tsx watch src/canvas-server.ts",
+    "dev:frontend": "cd frontend && npm run dev",
     "type-check": "tsc --noEmit",
     "test": "vitest",
     "test:bind": "node scripts/test-bind.cjs"
@@ -21,10 +24,7 @@
     "canvas",
     "diagram",
     "whiteboard",
-    "agent",
-    "adal",
-    "claude",
-    "cursor"
+    "agent"
   ],
   "author": "Mihai-Alexandru Chindriș",
   "license": "MIT",
@@ -37,11 +37,11 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "dotenv": "^16.4.0",
     "express": "^4.21.0",
-    "ws": "^8.18.0",
     "tldraw": "^3.0.0",
-    "@tldraw/store": "^3.0.0",
-    "@tldraw/tlschema": "^3.0.0"
+    "ws": "^8.18.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",

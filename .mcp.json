@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "tldraw": {
+      "command": "node",
+      "args": ["dist/index.js"],
+      "env": {
+        "EXPRESS_SERVER_URL": "http://127.0.0.1:3000"
+      }
+    }
+  }
+}

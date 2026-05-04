@@ -1,95 +1,101 @@
 # tldraw MCP Server
 
-> The most comprehensive MCP (Model Context Protocol) server for tldraw — programmatic canvas toolkit for AI agents.
+> Programmatic canvas toolkit for AI agents — create, read, update, and delete tldraw shapes in real time via the Model Context Protocol.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## What It Is
 
-A full-featured MCP server that gives AI agents programmatic control over tldraw canvases. Create, read, update, and delete shapes, manage scenes, export diagrams, and enable real-time collaboration between AI agents and humans.
+An MCP server that gives AI agents (AdaL, Claude, Cursor, Codex CLI…) programmatic control over a live tldraw canvas. Draw diagrams, architecture charts, and flowcharts by just describing what you want.
 
-**Inspired by** [mcp_excalidraw](https://github.com/yctimlin/mcp_excalidraw) (1.9K+ ⭐) — we aim to bring the same level of quality and completeness to the tldraw ecosystem.
-
-## Why This Exists
-
-| | tldraw Official MCP App | This Project |
-|---|---|---|
-| **Approach** | 3 tools (create, edit, delete) | 25+ tools with full CRUD, layout, scene management |
-| **State** | Cursor-only MCP App | Universal MCP server (stdio) — works with any client |
-| **Persistence** | In-app only | `.tldr` file I/O with export/import |
-| **AI Awareness** | Limited | `describe_scene`, `get_screenshot`, structured feedback |
-| **Clients** | Cursor (VS Code, ChatGPT, Claude planned) | AdaL CLI, Claude Desktop, Cursor, Codex CLI, any MCP client |
-| **Canvas** | Embedded in chat | Standalone web UI with WebSocket sync |
-
-## Features
-
-### MCP Tools (Planned: 25+)
-
-| Category | Tools |
-|----------|-------|
-| **Element CRUD** | `create_element`, `get_element`, `update_element`, `delete_element`, `query_elements`, `batch_create_elements`, `duplicate_elements` |
-| **Layout** | `align_elements`, `distribute_elements`, `group_elements`, `ungroup_elements`, `lock_elements`, `unlock_elements` |
-| **Scene Awareness** | `describe_scene`, `get_canvas_screenshot` |
-| **File I/O** | `export_scene`, `import_scene`, `export_to_image`, `export_to_url` |
-| **State Management** | `clear_canvas`, `snapshot_scene`, `restore_snapshot` |
-| **Viewport** | `set_viewport` |
-| **Conversion** | `create_from_mermaid` |
-| **Design Guide** | `read_diagram_guide` |
-
-### Shape Types
-
-- Rectangle, Ellipse, Diamond, Triangle, Arrow
-- Text, Line, Frame, Star, Note
-- Draw (freehand), Image, Group
+**Inspired by** [mcp_excalidraw](https://github.com/yctimlin/mcp_excalidraw) — the same quality and completeness, built for the tldraw ecosystem.
 
 ## Quick Start
 
 ### Prerequisites
 
 - Node.js >= 18
-- npm
 
-### Installation
+### 1 — Install & Build
 
 ```bash
 git clone https://github.com/chindris-mihai-alexandru/tldraw-mcp-server.git
 cd tldraw-mcp-server
 npm install
 npm run build
+npm run build:frontend
 ```
 
-### Running
+### 2 — Start the Canvas Server
 
-**Terminal 1 — Canvas Server:**
 ```bash
-PORT=3000 npm run canvas
-```
-Open http://127.0.0.1:3000 to see the tldraw canvas.
-
-**Terminal 2 — MCP Server (stdio):**
-```bash
-EXPRESS_SERVER_URL=http://127.0.0.1:3000 node dist/index.js
+npm run canvas
+# Canvas running at http://127.0.0.1:3000
 ```
 
-## MCP Client Configuration
+Open **http://127.0.0.1:3000** in your browser — this is the live canvas.
 
-### AdaL CLI
+### 3 — Connect an MCP Client
 
-Use the `/mcp` command inside AdaL to add the server:
-```
-/mcp add tldraw
-```
-
-Or configure manually in AdaL settings.
-
-### Claude Desktop
+The `.mcp.json` at the repo root works out-of-the-box for any project-level MCP client:
 
 ```json
 {
   "mcpServers": {
     "tldraw": {
       "command": "node",
-      "args": ["/path/to/tldraw-mcp-server/dist/index.js"],
+      "args": ["dist/index.js"],
+      "env": {
+        "EXPRESS_SERVER_URL": "http://127.0.0.1:3000"
+      }
+    }
+  }
+}
+```
+
+---
+
+## MCP Client Configuration
+
+### AdaL CLI (Primary Target)
+
+**Project-level** — the `.mcp.json` in this repo is pre-configured. Just open AdaL in this directory and the server is auto-discovered.
+
+```bash
+cd tldraw-mcp-server
+adal
+# AdaL auto-loads .mcp.json — tldraw tools are available immediately
+```
+
+Or add manually via the slash command:
+```
+/mcp
+```
+
+### Claude Code
+
+```bash
+# Project-level (commits .mcp.json to the repo)
+claude mcp add tldraw --scope project \
+  -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
+  -- node /absolute/path/to/tldraw-mcp-server/dist/index.js
+
+# User-level (available across all projects)
+claude mcp add tldraw --scope user \
+  -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
+  -- node /absolute/path/to/tldraw-mcp-server/dist/index.js
+```
+
+### Claude Desktop
+
+Config: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
+
+```json
+{
+  "mcpServers": {
+    "tldraw": {
+      "command": "node",
+      "args": ["/absolute/path/to/tldraw-mcp-server/dist/index.js"],
       "env": {
         "EXPRESS_SERVER_URL": "http://127.0.0.1:3000"
       }
@@ -100,12 +106,14 @@ Or configure manually in AdaL settings.
 
 ### Cursor
 
+Config: `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global)
+
 ```json
 {
   "mcpServers": {
     "tldraw": {
       "command": "node",
-      "args": ["/path/to/tldraw-mcp-server/dist/index.js"],
+      "args": ["/absolute/path/to/tldraw-mcp-server/dist/index.js"],
       "env": {
         "EXPRESS_SERVER_URL": "http://127.0.0.1:3000"
       }
@@ -119,48 +127,118 @@ Or configure manually in AdaL settings.
 ```bash
 codex mcp add tldraw \
   --env EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
-  -- node /path/to/tldraw-mcp-server/dist/index.js
+  -- node /absolute/path/to/tldraw-mcp-server/dist/index.js
 ```
+
+---
+
+## MCP Tools
+
+### ✅ Implemented (8 tools)
+
+| Tool | Description |
+|------|-------------|
+| `create_element` | Create a shape, text, arrow, or note on the canvas |
+| `get_element` | Get a single element by ID |
+| `update_element` | Partially update any element property |
+| `delete_element` | Delete an element by ID |
+| `query_elements` | List/filter elements by type and bounding box |
+| `batch_create_elements` | Create multiple elements atomically (efficient for diagrams) |
+| `clear_canvas` | Remove all elements (requires `confirm: true`) |
+| `read_diagram_guide` | Return tldraw color names, presets, and layout best practices |
+
+### 🗺️ Roadmap
+
+| Category | Tools | Status |
+|----------|-------|--------|
+| **Layout** | `align_elements`, `distribute_elements`, `group_elements`, `ungroup_elements` | Planned |
+| **Scene Awareness** | `describe_scene`, `get_canvas_screenshot` | Planned |
+| **File I/O** | `export_scene`, `import_scene`, `export_to_image` | Planned |
+| **State Management** | `snapshot_scene`, `restore_snapshot` | Planned |
+| **Viewport** | `set_viewport` | Planned |
+
+---
+
+## Shape Types
+
+`rectangle` · `ellipse` · `diamond` · `triangle` · `text` · `arrow` · `line` · `note` · `frame` · `star` · `cloud` · `hexagon`
+
+## Element Properties
+
+| Property | Values | Default |
+|----------|--------|---------|
+| `color` | `black` · `grey` · `blue` · `light-blue` · `violet` · `light-violet` · `red` · `light-red` · `orange` · `yellow` · `green` · `light-green` · `white` | `black` |
+| `fill` | `none` · `semi` · `solid` · `pattern` | `none` |
+| `dash` | `draw` · `solid` · `dashed` · `dotted` | `draw` |
+| `size` | `s` · `m` · `l` · `xl` | `m` |
+| `font` | `draw` · `sans` · `serif` · `mono` | `draw` |
+
+---
 
 ## Architecture
 
 ```
-┌─────────────────────┐     ┌──────────────────────┐
-│   MCP Client        │     │   Canvas Server       │
-│   (AdaL, Claude,    │────▶│   (Express + tldraw)  │
-│    Cursor, etc.)    │     │   Port 3000           │
-└─────────┬───────────┘     └──────────┬───────────┘
-          │ stdio                      │ WebSocket
-          ▼                            ▼
-┌─────────────────────┐     ┌──────────────────────┐
-│   MCP Server        │────▶│   Browser UI          │
-│   (Node.js)         │ HTTP│   (tldraw React app)  │
-│   Tools & Resources │     │   Real-time sync      │
-└─────────────────────┘     └──────────────────────┘
+┌─────────────────────┐         ┌─────────────────────────┐
+│   MCP Client        │  stdio  │   MCP Server             │
+│   AdaL, Claude,     │◀───────▶│   src/index.ts           │
+│   Cursor, etc.      │         │   8 tools · Zod validate │
+└─────────────────────┘         └────────────┬────────────┘
+                                             │ HTTP REST
+                                             ▼
+                                ┌─────────────────────────┐
+                                │   Canvas Server          │
+                                │   src/canvas-server.ts   │
+                                │   Express · Port 3000    │
+                                └────────────┬────────────┘
+                                             │ WebSocket /ws
+                                             ▼
+                                ┌─────────────────────────┐
+                                │   Browser UI             │
+                                │   frontend/src/App.tsx   │
+                                │   tldraw React app       │
+                                └─────────────────────────┘
 ```
 
-## Development Status
+**Flow:** MCP client calls a tool → MCP server validates with Zod → HTTP POST to canvas server → canvas server broadcasts via WebSocket → browser frontend applies to tldraw editor in real time.
 
-🚧 **Under active development** — contributions welcome!
+---
 
-### Roadmap
+## Development
 
-- [x] Repository setup and architecture design
-- [ ] Canvas server with tldraw SDK
-- [ ] Core MCP tools (create, get, update, delete)
-- [ ] Batch operations and layout tools
-- [ ] Scene awareness (describe, screenshot)
-- [ ] File I/O (export/import `.tldr` files)
-- [ ] State management (snapshots)
-- [ ] Mermaid conversion
-- [ ] Design guide resource
-- [ ] Agent skill (SKILL.md)
-- [ ] Docker support
-- [ ] npm package publishing
+```bash
+# Type check
+npm run type-check
 
-## Contributing
+# Backend (watch mode)
+npm run dev:canvas   # canvas server on :3000
+npm run dev          # MCP server on stdio
 
-Contributions are welcome! Please open an issue first to discuss what you'd like to change.
+# Frontend (watch mode with hot reload)
+npm run dev:frontend # Vite dev server on :5173
+
+# Build everything
+npm run build:all
+
+# Test MCP tools directly
+npx @modelcontextprotocol/inspector --cli \
+  -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
+  -- node dist/index.js --method tools/list
+```
+
+### Testing a Tool
+
+```bash
+# Create a rectangle
+npx @modelcontextprotocol/inspector --cli \
+  -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
+  -- node dist/index.js --method tools/call \
+  --tool-name create_element \
+  --tool-arg type=rectangle --tool-arg x=100 --tool-arg y=100 \
+  --tool-arg width=200 --tool-arg height=80 \
+  --tool-arg text="Hello" --tool-arg color=blue --tool-arg fill=semi
+```
+
+---
 
 ## License
 
@@ -169,5 +247,5 @@ Contributions are welcome! Please open an issue first to discuss what you'd like
 ## Acknowledgments
 
 - [tldraw](https://tldraw.dev/) — The infinite canvas SDK
-- [mcp_excalidraw](https://github.com/yctimlin/mcp_excalidraw) — Inspiration and reference architecture
-- [Model Context Protocol](https://modelcontextprotocol.io/) — The open standard for AI tool integration
+- [mcp_excalidraw](https://github.com/yctimlin/mcp_excalidraw) — Reference architecture
+- [Model Context Protocol](https://modelcontextprotocol.io/) — Open standard for AI tool integration

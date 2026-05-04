@@ -282,6 +282,155 @@ const tools: Tool[] = [
       'and anti-patterns. Call this before drawing to produce great diagrams.',
     inputSchema: { type: 'object', properties: {} },
   },
+
+  // ── Scene Awareness ────────────────────────────────────────────────────────
+  {
+    name: 'describe_scene',
+    description:
+      'Get a structured text description of everything on the canvas: element types, ' +
+      'positions, sizes, labels, connections, and bounding box. ' +
+      'Use this to understand what is on the canvas before making changes.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_canvas_screenshot',
+    description:
+      'Take a PNG screenshot of the current canvas and return it as a base64 image. ' +
+      'Requires the canvas frontend to be open in a browser. ' +
+      'Use this to visually verify what the diagram looks like.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        background: {
+          type: 'boolean',
+          description: 'Include background color (default: true)',
+        },
+      },
+    },
+  },
+
+  // ── File I/O ───────────────────────────────────────────────────────────────
+  {
+    name: 'export_scene',
+    description: 'Export all canvas elements as a JSON snapshot. Returns the raw JSON string.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'import_scene',
+    description:
+      'Import elements from a JSON string (from export_scene). ' +
+      '"replace" clears the canvas first; "merge" appends to existing elements.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        data: { type: 'string', description: 'JSON string from export_scene' },
+        mode: {
+          type: 'string',
+          enum: ['replace', 'merge'],
+          description: '"replace" clears first, "merge" appends (default: replace)',
+        },
+      },
+      required: ['data'],
+    },
+  },
+
+  // ── State Management ───────────────────────────────────────────────────────
+  {
+    name: 'snapshot_scene',
+    description: 'Save the current canvas state as a named snapshot for later restoration.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Snapshot name (e.g. "before-refactor")' },
+      },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'restore_snapshot',
+    description: 'Restore the canvas from a previously saved named snapshot.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the snapshot to restore' },
+      },
+      required: ['name'],
+    },
+  },
+
+  // ── Viewport ───────────────────────────────────────────────────────────────
+  {
+    name: 'set_viewport',
+    description:
+      'Control the canvas viewport. Use scrollToContent to zoom-to-fit, ' +
+      'scrollToElementId to center on an element, or set zoom/offset directly. ' +
+      'Requires the canvas frontend to be open in a browser.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        scrollToContent: {
+          type: 'boolean',
+          description: 'Zoom-to-fit all elements',
+        },
+        scrollToElementId: {
+          type: 'string',
+          description: 'Center and zoom to a specific element ID',
+        },
+        zoom: {
+          type: 'number',
+          description: 'Zoom level (0.1–10, where 1 = 100%)',
+        },
+        offsetX: { type: 'number', description: 'Camera X offset' },
+        offsetY: { type: 'number', description: 'Camera Y offset' },
+      },
+    },
+  },
+
+  // ── Layout ─────────────────────────────────────────────────────────────────
+  {
+    name: 'align_elements',
+    description:
+      'Align multiple elements along an axis. ' +
+      'left/right/center aligns horizontally; top/bottom/middle aligns vertically.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        elementIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'IDs of elements to align (minimum 2)',
+        },
+        alignment: {
+          type: 'string',
+          enum: ['left', 'center', 'right', 'top', 'middle', 'bottom'],
+          description: 'Alignment edge or axis',
+        },
+      },
+      required: ['elementIds', 'alignment'],
+    },
+  },
+  {
+    name: 'distribute_elements',
+    description:
+      'Distribute elements with equal spacing between them. ' +
+      'Requires at least 3 elements.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        elementIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'IDs of elements to distribute (minimum 3)',
+        },
+        direction: {
+          type: 'string',
+          enum: ['horizontal', 'vertical'],
+          description: 'Distribution axis',
+        },
+      },
+      required: ['elementIds', 'direction'],
+    },
+  },
 ]
 
 // ─── Diagram Design Guide ─────────────────────────────────────────────────────
@@ -445,6 +594,248 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
       case 'read_diagram_guide': {
         return { content: [{ type: 'text', text: DIAGRAM_GUIDE }] }
+      }
+
+      // ── describe_scene ──────────────────────────────────────────────────────
+      case 'describe_scene': {
+        const res = await canvasFetch('/api/elements')
+        const json = (await res.json()) as ApiResponse
+        const all = json.elements ?? []
+
+        if (all.length === 0) {
+          return { content: [{ type: 'text', text: 'The canvas is empty. No elements to describe.' }] }
+        }
+
+        // Stats
+        const typeCounts: Record<string, number> = {}
+        for (const el of all) typeCounts[el.type] = (typeCounts[el.type] ?? 0) + 1
+
+        // Bounding box
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+        for (const el of all) {
+          minX = Math.min(minX, el.x)
+          minY = Math.min(minY, el.y)
+          maxX = Math.max(maxX, el.x + (el.width ?? 0))
+          maxY = Math.max(maxY, el.y + (el.height ?? 0))
+        }
+
+        // Sort top-to-bottom, left-to-right
+        const sorted = [...all].sort((a, b) => {
+          const row = Math.floor(a.y / 60) - Math.floor(b.y / 60)
+          return row !== 0 ? row : a.x - b.x
+        })
+
+        const lines: string[] = [
+          '## Canvas Description',
+          `Total elements: ${all.length}`,
+          `Types: ${Object.entries(typeCounts).map(([t, c]) => `${t}(${c})`).join(', ')}`,
+          `Bounding box: (${Math.round(minX)},${Math.round(minY)}) → (${Math.round(maxX)},${Math.round(maxY)}) = ${Math.round(maxX - minX)}×${Math.round(maxY - minY)}px`,
+          '',
+          '### Elements (top-to-bottom, left-to-right):',
+        ]
+
+        for (const el of sorted) {
+          const parts = [`[${el.id}] ${el.type}`, `at (${Math.round(el.x)}, ${Math.round(el.y)})`]
+          if (el.width || el.height) parts.push(`${Math.round(el.width ?? 0)}×${Math.round(el.height ?? 0)}`)
+          if (el.text) parts.push(`"${el.text}"`)
+          if (el.color && el.color !== 'black') parts.push(`color:${el.color}`)
+          if (el.fill && el.fill !== 'none') parts.push(`fill:${el.fill}`)
+          if (el.locked) parts.push('(locked)')
+          if (el.startElementId) parts.push(`→ starts on ${el.startElementId}`)
+          if (el.endElementId) parts.push(`→ ends on ${el.endElementId}`)
+          lines.push(`  ${parts.join(' | ')}`)
+        }
+
+        const arrows = all.filter((el) => el.type === 'arrow' && (el.startElementId || el.endElementId))
+        if (arrows.length > 0) {
+          lines.push('', '### Connections:')
+          for (const a of arrows) {
+            const from = a.startElementId ?? '?'
+            const to = a.endElementId ?? '?'
+            const label = a.text ? ` "${a.text}"` : ''
+            lines.push(`  ${from} ──${label}──▶ ${to}`)
+          }
+        }
+
+        return { content: [{ type: 'text', text: lines.join('\n') }] }
+      }
+
+      // ── get_canvas_screenshot ───────────────────────────────────────────────
+      case 'get_canvas_screenshot': {
+        const { background = true } = z.object({ background: z.boolean().optional() }).parse(args ?? {})
+        const res = await canvasFetch('/api/export/image', {
+          method: 'POST',
+          body: JSON.stringify({ format: 'png', background }),
+        })
+        if (!res.ok) {
+          const err = (await res.json()) as ApiResponse
+          throw new Error(err.error ?? `Screenshot failed: ${res.status}`)
+        }
+        const data = (await res.json()) as { success: boolean; format: string; data: string }
+        if (!data.data) throw new Error('Screenshot returned empty data — is the canvas open in a browser?')
+        return {
+          content: [
+            { type: 'image' as const, data: data.data, mimeType: 'image/png' },
+            { type: 'text', text: 'Canvas screenshot captured. This is what the diagram currently looks like.' },
+          ],
+        }
+      }
+
+      // ── export_scene ────────────────────────────────────────────────────────
+      case 'export_scene': {
+        const res = await canvasFetch('/api/elements')
+        const json = (await res.json()) as ApiResponse
+        const scene = { version: 1, elements: json.elements ?? [], exportedAt: new Date().toISOString() }
+        return {
+          content: [{
+            type: 'text',
+            text: `Scene exported (${scene.elements.length} elements):\n\n${JSON.stringify(scene, null, 2)}`,
+          }],
+        }
+      }
+
+      // ── import_scene ────────────────────────────────────────────────────────
+      case 'import_scene': {
+        const { data: rawData, mode = 'replace' } = z.object({
+          data: z.string(),
+          mode: z.enum(['replace', 'merge']).optional(),
+        }).parse(args)
+
+        let parsed: { elements?: Partial<CanvasElement>[] }
+        try {
+          parsed = JSON.parse(rawData)
+        } catch {
+          throw new Error('Invalid JSON in data parameter')
+        }
+
+        const importEls: Partial<CanvasElement>[] = Array.isArray(parsed)
+          ? parsed
+          : (parsed.elements ?? [])
+
+        if (importEls.length === 0) throw new Error('No elements found in import data')
+
+        if (mode === 'replace') await clearCanvas()
+
+        const created = await batchCreateElements(importEls.map((el) => ({ ...el, id: el.id ?? generateId() })))
+        return {
+          content: [{
+            type: 'text',
+            text: `✅ Imported ${created.length} elements (mode: ${mode})`,
+          }],
+        }
+      }
+
+      // ── snapshot_scene ──────────────────────────────────────────────────────
+      case 'snapshot_scene': {
+        const { name } = z.object({ name: z.string() }).parse(args)
+        const res = await canvasFetch('/api/snapshots', {
+          method: 'POST',
+          body: JSON.stringify({ name }),
+        })
+        const json = (await res.json()) as { success: boolean; name: string; elementCount: number; createdAt: string; error?: string }
+        if (!res.ok || !json.success) throw new Error(json.error ?? `Snapshot failed: ${res.status}`)
+        return {
+          content: [{
+            type: 'text',
+            text: `✅ Snapshot "${json.name}" saved (${json.elementCount} elements, ${json.createdAt})`,
+          }],
+        }
+      }
+
+      // ── restore_snapshot ────────────────────────────────────────────────────
+      case 'restore_snapshot': {
+        const { name } = z.object({ name: z.string() }).parse(args)
+        const res = await canvasFetch(`/api/snapshots/${encodeURIComponent(name)}`)
+        if (!res.ok) throw new Error(`Snapshot "${name}" not found`)
+        const json = (await res.json()) as { success: boolean; snapshot: { name: string; elements: Partial<CanvasElement>[]; createdAt: string } }
+        await clearCanvas()
+        const created = await batchCreateElements(json.snapshot.elements)
+        return {
+          content: [{
+            type: 'text',
+            text: `✅ Snapshot "${name}" restored (${created.length} elements)`,
+          }],
+        }
+      }
+
+      // ── set_viewport ────────────────────────────────────────────────────────
+      case 'set_viewport': {
+        const params = z.object({
+          scrollToContent: z.boolean().optional(),
+          scrollToElementId: z.string().optional(),
+          zoom: z.number().min(0.1).max(10).optional(),
+          offsetX: z.number().optional(),
+          offsetY: z.number().optional(),
+        }).parse(args ?? {})
+        const res = await canvasFetch('/api/viewport', { method: 'POST', body: JSON.stringify(params) })
+        if (!res.ok) throw new Error(`Viewport command failed: ${res.status}`)
+        return { content: [{ type: 'text', text: '✅ Viewport updated.' }] }
+      }
+
+      // ── align_elements ──────────────────────────────────────────────────────
+      case 'align_elements': {
+        const { elementIds, alignment } = z.object({
+          elementIds: z.array(z.string()).min(2, 'Need at least 2 elements to align'),
+          alignment: z.enum(['left', 'center', 'right', 'top', 'middle', 'bottom']),
+        }).parse(args)
+
+        // Fetch all elements
+        const fetched = await Promise.all(elementIds.map((id) => getElement(id).catch(() => null)))
+        const els = fetched.filter((e): e is CanvasElement => e !== null)
+        if (els.length < 2) throw new Error('Could not fetch enough elements to align')
+
+        type Coord = { x?: number; y?: number }
+        let getCoord: (el: CanvasElement) => Coord
+
+        switch (alignment) {
+          case 'left': { const v = Math.min(...els.map((e) => e.x)); getCoord = () => ({ x: v }); break }
+          case 'right': { const v = Math.max(...els.map((e) => e.x + (e.width ?? 0))); getCoord = (e) => ({ x: v - (e.width ?? 0) }); break }
+          case 'center': { const v = els.reduce((s, e) => s + e.x + (e.width ?? 0) / 2, 0) / els.length; getCoord = (e) => ({ x: v - (e.width ?? 0) / 2 }); break }
+          case 'top': { const v = Math.min(...els.map((e) => e.y)); getCoord = () => ({ y: v }); break }
+          case 'bottom': { const v = Math.max(...els.map((e) => e.y + (e.height ?? 0))); getCoord = (e) => ({ y: v - (e.height ?? 0) }); break }
+          case 'middle': { const v = els.reduce((s, e) => s + e.y + (e.height ?? 0) / 2, 0) / els.length; getCoord = (e) => ({ y: v - (e.height ?? 0) / 2 }); break }
+        }
+
+        await Promise.all(els.map((el) => updateElement(el.id, getCoord!(el))))
+        return { content: [{ type: 'text', text: `✅ Aligned ${els.length} elements (${alignment})` }] }
+      }
+
+      // ── distribute_elements ─────────────────────────────────────────────────
+      case 'distribute_elements': {
+        const { elementIds, direction } = z.object({
+          elementIds: z.array(z.string()).min(3, 'Need at least 3 elements to distribute'),
+          direction: z.enum(['horizontal', 'vertical']),
+        }).parse(args)
+
+        const fetched = await Promise.all(elementIds.map((id) => getElement(id).catch(() => null)))
+        const els = fetched.filter((e): e is CanvasElement => e !== null)
+        if (els.length < 3) throw new Error('Could not fetch enough elements to distribute')
+
+        if (direction === 'horizontal') {
+          els.sort((a, b) => a.x - b.x)
+          const first = els[0]!, last = els[els.length - 1]!
+          const totalSpan = (last.x + (last.width ?? 0)) - first.x
+          const totalW = els.reduce((s, e) => s + (e.width ?? 0), 0)
+          const gap = (totalSpan - totalW) / (els.length - 1)
+          let cur = first.x
+          for (const el of els) {
+            await updateElement(el.id, { x: cur })
+            cur += (el.width ?? 0) + gap
+          }
+        } else {
+          els.sort((a, b) => a.y - b.y)
+          const first = els[0]!, last = els[els.length - 1]!
+          const totalSpan = (last.y + (last.height ?? 0)) - first.y
+          const totalH = els.reduce((s, e) => s + (e.height ?? 0), 0)
+          const gap = (totalSpan - totalH) / (els.length - 1)
+          let cur = first.y
+          for (const el of els) {
+            await updateElement(el.id, { y: cur })
+            cur += (el.height ?? 0) + gap
+          }
+        }
+
+        return { content: [{ type: 'text', text: `✅ Distributed ${els.length} elements (${direction})` }] }
       }
 
       default:

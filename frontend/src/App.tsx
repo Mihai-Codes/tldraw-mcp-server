@@ -218,15 +218,16 @@ export function App() {
           ws.send(JSON.stringify({ type: 'screenshot_result', format: 'svg', data: b64 }))
         }
       } else {
-        const blob = await editor.toImage([...shapeIds], { type: 'png', background, scale: 1 })
-        if (blob) {
+        // toImage returns { blob, width, height }
+        const result = await editor.toImage([...shapeIds], { format: 'png', background, pixelRatio: 2 })
+        if (result) {
           const reader = new FileReader()
           reader.onload = () => {
             const dataUrl = reader.result as string
             const b64 = dataUrl.split(',')[1] ?? ''
-            ws?.send(JSON.stringify({ type: 'screenshot_result', format: 'png', data: b64 }))
+            ws.send(JSON.stringify({ type: 'screenshot_result', format: 'png', data: b64 }))
           }
-          reader.readAsDataURL(blob)
+          reader.readAsDataURL(result.blob)
         }
       }
     } catch (err) {
@@ -337,7 +338,6 @@ export function App() {
       const shapeId = createShapeId(params.scrollToElementId)
       const shape = editor.getShape(shapeId)
       if (shape) {
-        editor.zoomToSelection()
         editor.select(shapeId)
         editor.zoomToSelection()
       }
@@ -353,7 +353,7 @@ export function App() {
     editorRef.current = editor
 
     // Expose editor globally for debugging
-    ;(window as Record<string, unknown>).__tldraw_editor = editor
+    ;(window as unknown as Record<string, unknown>).__tldraw_editor = editor
 
     // Notify canvas server
     fetch('/api/editor-ready', { method: 'POST' }).catch(() => {})

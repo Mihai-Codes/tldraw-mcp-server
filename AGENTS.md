@@ -15,7 +15,7 @@ An MCP (Model Context Protocol) server that gives AI agents programmatic control
 ```
 tldraw-mcp-server/
 ├── src/
-│   ├── index.ts          # MCP server entry point — 20 tools, Zod schemas
+│   ├── index.ts          # MCP server entry point — 27 tools, Zod schemas
 │   ├── canvas-server.ts  # Express + WebSocket canvas server — REST CRUD + snapshot
 │   ├── types.ts          # Shared types: CanvasElement, WSMessage, ApiResponse, generateId
 │   ├── layout/

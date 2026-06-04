@@ -6,7 +6,7 @@
 
 > Programmatic canvas toolkit for AI agents — create, read, update, and delete tldraw shapes in real time via the Model Context Protocol.
 
-[![CI](https://github.com/chindris-mihai-alexandru/tldraw-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/chindris-mihai-alexandru/tldraw-mcp-server/actions/workflows/ci.yml)
+[![CI](https://github.com/Mihai-Codes/tldraw-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/Mihai-Codes/tldraw-mcp-server/actions/workflows/ci.yml)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)

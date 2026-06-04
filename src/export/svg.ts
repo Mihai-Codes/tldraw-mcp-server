@@ -1,5 +1,7 @@
 import type { CanvasElement } from '../types.js'
 
+const PLAYWRIGHT_TIMEOUT = 15_000
+
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
 const COLOR_MAP: Record<string, string> = {
@@ -228,4 +230,46 @@ export function generateSvg(elements: CanvasElement[], background = true): strin
     ${texts.join('\n    ')}
   </g>
 </svg>`
+}
+
+/**
+ * Server-side PNG export using Playwright.
+ * Works without a browser open — uses the SVG generator + headless Chromium.
+ */
+export async function exportPng(elements: CanvasElement[], background = true): Promise<{ data: string; format: string }> {
+  const svg = generateSvg(elements, background)
+
+  let playwright: typeof import('playwright') | null = null
+  try {
+    playwright = await import('playwright')
+  } catch {
+    throw new Error(
+      'Playwright is not installed. Install it with: npm install playwright && npx playwright install chromium'
+    )
+  }
+
+  const browser = await playwright.chromium.launch({ headless: true })
+  try {
+    const page = await browser.newPage()
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: ${background ? '#ffffff' : 'transparent'}; }
+  svg { display: block; }
+</style>
+</head>
+<body>${svg}</body>
+</html>`
+
+    await page.setContent(html, { waitUntil: 'networkidle' })
+    await page.evaluate(() => document.fonts.ready)
+
+    const data = await page.screenshot({ type: 'png' })
+    return { data: Buffer.from(data).toString('base64'), format: 'png' }
+  } finally {
+    await browser.close()
+  }
 }

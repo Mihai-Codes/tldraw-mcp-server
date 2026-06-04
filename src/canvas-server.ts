@@ -428,10 +428,29 @@ app.post('/api/viewport', (req: Request, res: Response) => {
 app.post('/api/export/image', async (req: Request, res: Response) => {
   const { format = 'png', background = true } = req.body as { format?: 'png' | 'svg'; background?: boolean }
   try {
-    const result = await requestScreenshot(format, background)
-    res.json({ success: true, format: result.format, data: result.data })
+    // Prefer server-side SVG generator + Playwright (no browser needed)
+    if (format === 'png' || format === 'svg') {
+      const { exportPng, generateSvg } = require('../export/svg.js')
+      const allElements = Array.from(elements.values())
+      if (format === 'svg') {
+        const svg = generateSvg(allElements, background)
+        res.json({ success: true, format: 'svg', data: svg })
+      } else {
+        const result = await exportPng(allElements, background)
+        res.json({ success: true, format: 'png', data: result.data })
+      }
+      return
+    }
   } catch (err) {
-    res.status(503).json({ success: false, error: (err as Error).message } satisfies ApiResponse)
+    // Fall back to browser-based screenshot if server-side fails
+    console.warn('Server-side export failed, falling back to browser:', err)
+    try {
+      const result = await requestScreenshot(format, background)
+      res.json({ success: true, format: result.format, data: result.data })
+    } catch (fallbackErr) {
+      res.status(503).json({ success: false, error: (fallbackErr as Error).message } satisfies ApiResponse)
+    }
+    return
   }
 })
 

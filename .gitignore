@@ -6,3 +6,4 @@ dist/
 *.log
 coverage/
 .vitest/
+assets/media_assets.json

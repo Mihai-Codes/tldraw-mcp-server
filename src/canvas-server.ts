@@ -410,8 +410,39 @@ app.delete('/api/elements/:id', (req: Request, res: Response) => {
     res.status(404).json({ success: false, error: `Element ${id} not found` } satisfies ApiResponse)
     return
   }
+  const el = elements.get(id)!
   elements.delete(id)
   broadcast({ type: 'element_deleted', id })
+
+  // If the deleted element belonged to a group, remove it from the group's childIds
+  if (el.parentId) {
+    const group = elements.get(el.parentId)
+    if (group && group.type === 'group' && group.childIds) {
+      const now = new Date().toISOString()
+      const newChildIds = group.childIds.filter((cid) => cid !== id)
+      if (newChildIds.length === 0) {
+        // Group is now empty — dissolve it automatically
+        elements.delete(el.parentId)
+        broadcast({ type: 'element_deleted', id: el.parentId })
+      } else if (newChildIds.length === 1) {
+        // Only one child left — dissolve the group (tldraw requires >= 2 for a group)
+        const lastChildId = newChildIds[0]!
+        const lastChild = elements.get(lastChildId)
+        if (lastChild) {
+          const updated = { ...lastChild, parentId: undefined, updatedAt: now, version: lastChild.version + 1 }
+          elements.set(lastChildId, updated)
+          broadcast({ type: 'element_updated', element: updated })
+        }
+        elements.delete(el.parentId)
+        broadcast({ type: 'element_deleted', id: el.parentId })
+      } else {
+        const updatedGroup = { ...group, childIds: newChildIds, updatedAt: now, version: group.version + 1 }
+        elements.set(el.parentId, updatedGroup)
+        broadcast({ type: 'element_updated', element: updatedGroup })
+      }
+    }
+  }
+
   res.json({ success: true, message: `Element ${id} deleted` } satisfies ApiResponse)
 })
 

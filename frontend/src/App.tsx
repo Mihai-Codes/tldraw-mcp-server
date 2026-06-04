@@ -390,8 +390,11 @@ export function App() {
               .filter((id) => !serverIds.has(id))
               .map((id) => id)
             if (toDelete.length > 0) editor.deleteShapes(toDelete)
-            // Apply all server elements
-            for (const el of msg.elements) applyElement(editor, el)
+            // Apply non-group elements first so children exist before groupShapes() is called
+            const nonGroups = msg.elements.filter((e) => e.type !== 'group')
+            const groups = msg.elements.filter((e) => e.type === 'group')
+            for (const el of nonGroups) applyElement(editor, el)
+            for (const el of groups) applyElement(editor, el)
           }, { history: 'ignore' })
           break
         }

@@ -1149,6 +1149,12 @@ export function createTldrawMcpServer(config: TldrawMcpConfig = loadConfig()): S
           height: z.number().optional(),
         }).parse(args)
 
+        // Validate the target is actually a sticky note
+        const existing = await getElement(id)
+        if (existing.type !== 'note') {
+          throw new Error(`Element "${id}" is type "${existing.type}", not a sticky note. Use update_element for other shapes.`)
+        }
+
         const el = await updateElement(id, updates as Partial<CanvasElement>)
         return {
           content: [{

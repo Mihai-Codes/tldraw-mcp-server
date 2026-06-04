@@ -12,7 +12,7 @@
 [![tldraw](https://img.shields.io/badge/tldraw-4.5-000000)](https://tldraw.dev/)
 [![MCP](https://img.shields.io/badge/Model_Context_Protocol-Server-5E5CE6)](https://modelcontextprotocol.io/)
 [![Express](https://img.shields.io/badge/Express-4.21-000000?logo=express&logoColor=white)](https://expressjs.com/)
-[![WebSocket](https://img.shields.io/badge/WebSocket-ws_8.18-010101)](https://github.com/websockets/ws)
+[![WebSocket](https://img.shields.io/badge/WebSocket-ws_8.21-010101)](https://github.com/websockets/ws)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## What It Is

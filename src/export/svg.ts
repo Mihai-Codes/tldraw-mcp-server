@@ -45,7 +45,14 @@ function computeBounds(elements: CanvasElement[]): SvgBounds {
   let maxY = -Infinity
 
   for (const el of elements) {
-    if (el.type === 'arrow' || el.type === 'line') continue
+    if (el.type === 'arrow' || el.type === 'line') {
+      if (el.startElementId || el.endElementId) continue
+      minX = Math.min(minX, el.x)
+      minY = Math.min(minY, el.y)
+      maxX = Math.max(maxX, el.x + 1)
+      maxY = Math.max(maxY, el.y + 1)
+      continue
+    }
 
     minX = Math.min(minX, el.x)
     minY = Math.min(minY, el.y)

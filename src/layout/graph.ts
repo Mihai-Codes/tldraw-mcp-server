@@ -37,6 +37,7 @@ export function buildLayoutGraph(elements: CanvasElement[]): LayoutGraph {
     const targetId = el.endElementId
 
     if (!sourceId || !targetId) continue
+    if (sourceId === targetId) continue
     if (!nodeIds.has(sourceId) || !nodeIds.has(targetId)) continue
 
     edges.push({

@@ -234,4 +234,86 @@ describe('SVG Export', () => {
 
     expect(svg).toContain('<line')
   })
+
+  it('handles empty elements array', () => {
+    const svg = generateSvg([])
+
+    expect(svg).toContain('<svg')
+    expect(svg).toContain('viewBox="0 0 800 600"')
+  })
+
+  it('escapes XML special characters in text', () => {
+    const elements = [
+      makeElement({ id: 'test', text: '<script>alert("xss")</script>' }),
+    ]
+
+    const svg = generateSvg(elements)
+
+    expect(svg).not.toContain('<script>')
+    expect(svg).toContain('&lt;script&gt;')
+  })
+})
+
+describe('Layout Engine Edge Cases', () => {
+  it('handles empty elements array', () => {
+    const result = computeLayout([])
+
+    expect(result.elementCount).toBe(0)
+    expect(result.positions).toHaveLength(0)
+  })
+
+  it('handles single element', () => {
+    const elements = [makeElement({ id: 'single' })]
+    const result = computeLayout(elements)
+
+    expect(result.elementCount).toBe(1)
+    expect(result.positions).toHaveLength(1)
+  })
+
+  it('handles elements with missing dimensions', () => {
+    const elements = [
+      makeElement({ id: 'no-dims', width: undefined, height: undefined }),
+    ]
+
+    const result = computeLayout(elements)
+
+    expect(result.elementCount).toBe(1)
+    expect(result.positions[0].width).toBe(160)
+    expect(result.positions[0].height).toBe(80)
+  })
+
+  it('handles self-referencing arrows gracefully', () => {
+    const elements = [
+      makeElement({ id: 'self' }),
+      makeArrow('self', 'self'),
+    ]
+
+    const graph = buildLayoutGraph(elements)
+
+    expect(graph.nodes).toHaveLength(1)
+    expect(graph.edges).toHaveLength(0)
+  })
+
+  it('dagre handles disconnected graph', () => {
+    const elements = [
+      makeElement({ id: 'a' }),
+      makeElement({ id: 'b' }),
+    ]
+
+    const result = computeDagreLayout(elements)
+
+    expect(result.elementCount).toBe(2)
+    expect(result.bbox.width).toBeGreaterThan(0)
+  })
+
+  it('force layout handles disconnected graph', () => {
+    const elements = [
+      makeElement({ id: 'a' }),
+      makeElement({ id: 'b' }),
+    ]
+
+    const result = computeForceLayout(elements)
+
+    expect(result.elementCount).toBe(2)
+  })
 })

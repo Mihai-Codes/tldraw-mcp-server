@@ -1,4 +1,4 @@
-import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide } from 'd3-force'
+import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, forceX, forceY } from 'd3-force'
 import type { CanvasElement } from '../types.js'
 import type { LayoutOptions, LayoutResult, LayoutPosition, ForceOptions } from './types.js'
 import { buildLayoutGraph, computeBoundingBox } from './graph.js'
@@ -52,6 +52,8 @@ export function computeForceLayout(
     )
     .force('charge', forceManyBody().strength(forceOpts.chargeStrength!))
     .force('center', forceCenter(0, 0).strength(forceOpts.centerStrength!))
+    .force('x', forceX(0).strength(0.05))
+    .force('y', forceY(0).strength(0.05))
     .force(
       'collide',
       forceCollide().radius((d: any) => Math.max(d.width, d.height) / 2 + 20)

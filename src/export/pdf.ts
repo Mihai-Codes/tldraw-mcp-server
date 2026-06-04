@@ -66,13 +66,17 @@ async function convertSvgToPdfWithPlaywright(
 
 async function convertSvgToPdfWithPdfLib(
   svg: string,
-  _options: PdfExportOptions
+  options: PdfExportOptions
 ): Promise<Buffer> {
   const pdfLib = await import('pdf-lib')
   const { PDFDocument } = pdfLib
 
   const pdfDoc = await PDFDocument.create()
-  const page = pdfDoc.addPage([612, 792])
+  const paper = PAPER_SIZES[options.format ?? 'a4']
+  const isLandscape = options.landscape ?? false
+  const pageWidth = isLandscape ? paper.height : paper.width
+  const pageHeight = isLandscape ? paper.width : paper.height
+  const page = pdfDoc.addPage([pageWidth, pageHeight])
 
   page.drawText('SVG Export (PDF-lib fallback)', {
     x: 50,
@@ -105,7 +109,8 @@ export async function exportPdf(
   let buffer: Buffer
   try {
     buffer = await convertSvgToPdfWithPlaywright(svg, options)
-  } catch {
+  } catch (err) {
+    console.warn('Playwright PDF export failed, falling back to pdf-lib:', err)
     buffer = await convertSvgToPdfWithPdfLib(svg, options)
   }
 

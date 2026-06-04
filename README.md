@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/tldraw-mcp-logo.png" alt="tldraw MCP Server logo" width="720" />
+</p>
+
 # tldraw MCP Server
 
 > Programmatic canvas toolkit for AI agents - create, read, update, and delete tldraw shapes in real time via the Model Context Protocol.

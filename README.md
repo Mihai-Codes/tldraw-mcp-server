@@ -295,7 +295,7 @@ No migration is required for existing AdaL users: stdio remains the default. To 
 
 ## MCP Tools
 
-### Implemented (17 tools)
+### Implemented (20 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -316,12 +316,16 @@ No migration is required for existing AdaL users: stdio remains the default. To 
 | `set_viewport` | Zoom, pan, zoom-to-fit, or center on a specific element |
 | `align_elements` | Align multiple elements using an atomic batch update |
 | `distribute_elements` | Distribute multiple elements evenly using an atomic batch update |
+| `auto_layout` | Automatically arrange elements using dagre, force-directed, or grid layout |
+| `export_svg` | Export the current canvas as an SVG string |
+| `export_pdf` | Export the current canvas as a PDF file (requires Playwright for full fidelity) |
 
 ### Roadmap
 
 | Category | Tools | Status |
 |----------|-------|--------|
 | **Grouping** | `group_elements`, `ungroup_elements` | Planned |
+| **Advanced Export** | `export_png` (via Playwright), `export_jpg` | Planned |
 
 ---
 

@@ -45,3 +45,6 @@ jobs:
 
       - name: Tool discovery payload budget
         run: npm run bench:tools
+
+      - name: Startup performance budget
+        run: npm run bench:startup

@@ -400,6 +400,47 @@ app.get('/api/snapshots/:name', (req: Request, res: Response) => {
   res.json({ success: true, snapshot: snap })
 })
 
+// ─── REST: Layout ───────────────────────────────────────────────────────────
+
+app.post('/api/layout', (req: Request, res: Response) => {
+  const { computeLayout } = require('../layout/engine.js')
+  const allElements = Array.from(elements.values())
+
+  try {
+    const result = computeLayout(allElements, req.body)
+    res.json({ success: true, layout: result })
+  } catch (err) {
+    res.status(400).json({ success: false, error: (err as Error).message } satisfies ApiResponse)
+  }
+})
+
+// ─── REST: Export PDF/SVG ───────────────────────────────────────────────────
+
+app.post('/api/export/svg', (req: Request, res: Response) => {
+  const { generateSvg } = require('../export/svg.js')
+  const allElements = Array.from(elements.values())
+  const { background = true } = req.body as { background?: boolean }
+
+  try {
+    const svg = generateSvg(allElements, background)
+    res.json({ success: true, format: 'svg', data: svg })
+  } catch (err) {
+    res.status(500).json({ success: false, error: (err as Error).message } satisfies ApiResponse)
+  }
+})
+
+app.post('/api/export/pdf', async (req: Request, res: Response) => {
+  const { exportPdf } = require('../export/pdf.js')
+  const allElements = Array.from(elements.values())
+
+  try {
+    const result = await exportPdf(allElements, req.body)
+    res.json({ success: true, format: 'pdf', data: result.buffer.toString('base64') })
+  } catch (err) {
+    res.status(500).json({ success: false, error: (err as Error).message } satisfies ApiResponse)
+  }
+})
+
 // ─── Static Frontend ──────────────────────────────────────────────────────────
 
 const publicDir = path.join(__dirname, 'public')

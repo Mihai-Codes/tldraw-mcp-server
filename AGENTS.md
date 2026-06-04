@@ -15,9 +15,19 @@ An MCP (Model Context Protocol) server that gives AI agents programmatic control
 ```
 tldraw-mcp-server/
 ├── src/
-│   ├── index.ts          # MCP server entry point — 17 tools, Zod schemas
+│   ├── index.ts          # MCP server entry point — 20 tools, Zod schemas
 │   ├── canvas-server.ts  # Express + WebSocket canvas server — REST CRUD + snapshot
-│   └── types.ts          # Shared types: CanvasElement, WSMessage, ApiResponse, generateId
+│   ├── types.ts          # Shared types: CanvasElement, WSMessage, ApiResponse, generateId
+│   ├── layout/
+│   │   ├── engine.ts     # Main layout engine entry point
+│   │   ├── dagre.ts      # Hierarchical layout using @dagrejs/dagre
+│   │   ├── force.ts      # Force-directed layout using d3-force
+│   │   ├── grid.ts       # Grid layout algorithm
+│   │   ├── graph.ts      # Graph building helpers for layout algorithms
+│   │   └── types.ts      # Layout types and interfaces
+│   └── export/
+│       ├── svg.ts        # SVG generation from elements
+│       └── pdf.ts        # PDF export using Playwright or pdf-lib fallback
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx       # React component — WS sync, tldraw shape mapping
@@ -54,6 +64,9 @@ tldraw-mcp-server/
 | `batch_create_elements` | Atomic multi-create — assign custom IDs for arrow bindings |
 | `clear_canvas` | Wipe all elements (`confirm: true` required) |
 | `read_diagram_guide` | Return color names, fill/dash/size presets, layout rules |
+| `auto_layout` | Automatic layout using dagre (hierarchical), force-directed, or grid |
+| `export_svg` | Export canvas as SVG string |
+| `export_pdf` | Export canvas as PDF (Playwright for full fidelity, pdf-lib fallback) |
 
 ## REST API (Canvas Server)
 
@@ -71,6 +84,9 @@ tldraw-mcp-server/
 | `DELETE` | `/api/elements/:id` | Delete one |
 | `POST` | `/api/viewport` | Broadcast viewport command to browser |
 | `POST` | `/api/export/image` | Request screenshot from browser (`format`, `background`) |
+| `POST` | `/api/export/svg` | Export canvas as SVG |
+| `POST` | `/api/export/pdf` | Export canvas as PDF |
+| `POST` | `/api/layout` | Apply layout algorithm to elements |
 | `POST` | `/api/snapshots` | Save named snapshot |
 | `GET` | `/api/snapshots/:name` | Retrieve snapshot |
 
@@ -89,6 +105,43 @@ Server → Browser:
 
 Browser → Server:
 - `{ type: 'screenshot_result', format, data, requestId, error? }` — base64 image data or error correlated by request ID
+
+## Layout Engine
+
+The layout engine is in `src/layout/` and provides three algorithms:
+
+### Algorithms
+
+| Algorithm | Library | Use Case | Deterministic |
+|-----------|---------|----------|---------------|
+| `dagre` | `@dagrejs/dagre` | Hierarchical diagrams (flowcharts, org charts) | Yes |
+| `force` | `d3-force` | Organic layouts (network graphs, mind maps) | Yes |
+| `grid` | Custom | Simple grid arrangements | Yes |
+
+### Usage
+
+```typescript
+import { computeLayout } from './layout/engine.js'
+
+const result = computeLayout(elements, {
+  algorithm: 'dagre',
+  dagre: { rankdir: 'LR', nodesep: 60 },
+})
+
+// result.positions: [{ id, x, y, width, height }]
+// result.bbox: { x, y, width, height }
+```
+
+### Graph Building
+
+The layout engine uses `buildLayoutGraph()` to convert `CanvasElement[]` into a graph structure:
+- Shapes (rectangle, ellipse, etc.) become nodes
+- Arrows with `startElementId`/`endElementId` become edges
+- Unbound arrows are ignored
+
+### Label-Aware Sizing
+
+Node dimensions come from element `width`/`height` properties (default: 160×80). The layout engine respects these dimensions and includes them in spacing calculations.
 
 ## Common Tasks
 

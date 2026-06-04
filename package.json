@@ -17,6 +17,7 @@
     "test:smoke:stdio": "RUN_MCP_SMOKE=true MCP_TRANSPORT=stdio vitest run test/mcp-transport-smoke.test.ts",
     "test:smoke:http": "RUN_MCP_SMOKE=true MCP_TRANSPORT=http vitest run test/mcp-transport-smoke.test.ts",
     "bench:tools": "npm run build --silent && node scripts/bench-tool-definitions.mjs",
+    "bench:startup": "npm run build --silent && node scripts/bench-startup.mjs",
     "test:bind": "node scripts/test-bind.cjs"
   },
   "keywords": [
@@ -39,17 +40,22 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.0.0",
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "d3-force": "^3.0.0",
     "dotenv": "^16.4.0",
     "express": "^4.21.0",
+    "pdf-lib": "^1.17.1",
     "tldraw": "^4.5.0",
     "ws": "^8.18.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@types/d3-force": "^3.0.10",
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.0",
+    "playwright": "^1.60.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"

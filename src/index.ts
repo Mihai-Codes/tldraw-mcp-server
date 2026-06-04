@@ -23,6 +23,8 @@ import { createToolNameAdapter } from './client-adapter.js'
 import { loadConfig, type TldrawMcpConfig } from './config.js'
 import { startMcpServer } from './transport.js'
 import { CanvasElement, ApiResponse, generateId, ELEMENT_TYPES } from './types.js'
+import { layoutTools } from './tools/layout.js'
+import { exportTools } from './tools/layout.js'
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 
@@ -449,6 +451,8 @@ const tools: Tool[] = [
       required: ['elementIds', 'direction'],
     },
   },
+  ...layoutTools,
+  ...exportTools,
 ]
 
 // ─── Diagram Design Guide ─────────────────────────────────────────────────────
@@ -918,6 +922,98 @@ export function createTldrawMcpServer(config: TldrawMcpConfig = loadConfig()): S
         }
 
         return { content: [{ type: 'text', text: `Distributed ${els.length} elements (${direction})` }] }
+      }
+
+      // ── auto_layout ────────────────────────────────────────────────────────
+      case 'auto_layout': {
+        const { computeLayout } = await import('./layout/engine.js')
+        const { algorithm, elementIds, dagre: dagreOpts, force: forceOpts, grid: gridOpts, respectLocked } = z.object({
+          algorithm: z.enum(['dagre', 'force', 'grid']),
+          elementIds: z.array(z.string()).optional(),
+          dagre: z.object({
+            rankdir: z.enum(['TB', 'LR', 'BT', 'RL']).optional(),
+            nodesep: z.number().optional(),
+            ranksep: z.number().optional(),
+          }).optional(),
+          force: z.object({
+            linkDistance: z.number().optional(),
+            chargeStrength: z.number().optional(),
+            iterations: z.number().optional(),
+          }).optional(),
+          grid: z.object({
+            columns: z.number().optional(),
+            gapX: z.number().optional(),
+            gapY: z.number().optional(),
+            direction: z.enum(['row', 'column']).optional(),
+          }).optional(),
+          respectLocked: z.boolean().optional(),
+        }).parse(args)
+
+        const allElements = await queryElements({})
+        const result = computeLayout(allElements, {
+          algorithm,
+          elementIds,
+          dagre: dagreOpts,
+          force: forceOpts,
+          grid: gridOpts,
+          respectLocked,
+        })
+
+        const updates = result.positions.map((pos) => ({
+          id: pos.id,
+          changes: { x: pos.x, y: pos.y },
+        }))
+
+        if (updates.length > 0) {
+          await batchUpdateElements(updates)
+        }
+
+        return {
+          content: [{
+            type: 'text',
+            text: `Layout applied (${algorithm}): ${result.elementCount} elements positioned.\n` +
+              `Bounding box: (${Math.round(result.bbox.x)}, ${Math.round(result.bbox.y)}) → ` +
+              `(${Math.round(result.bbox.x + result.bbox.width)}, ${Math.round(result.bbox.y + result.bbox.height)})\n` +
+              `Size: ${Math.round(result.bbox.width)}×${Math.round(result.bbox.height)}px`,
+          }],
+        }
+      }
+
+      // ── export_svg ─────────────────────────────────────────────────────────
+      case 'export_svg': {
+        const { generateSvg } = await import('./export/svg.js')
+        const { background = true } = z.object({ background: z.boolean().optional() }).parse(args ?? {})
+        const allElements = await queryElements({})
+        const svg = generateSvg(allElements, background)
+        return {
+          content: [{
+            type: 'text',
+            text: `SVG exported (${allElements.length} elements):\n\n${svg}`,
+          }],
+        }
+      }
+
+      // ── export_pdf ─────────────────────────────────────────────────────────
+      case 'export_pdf': {
+        const { exportPdf } = await import('./export/pdf.js')
+        const { background = true, format = 'a4', landscape = false } = z.object({
+          background: z.boolean().optional(),
+          format: z.enum(['a4', 'letter', 'legal']).optional(),
+          landscape: z.boolean().optional(),
+        }).parse(args ?? {})
+
+        const allElements = await queryElements({})
+        const result = await exportPdf(allElements, { background, format, landscape })
+        return {
+          content: [{
+            type: 'image' as const,
+            data: result.buffer.toString('base64'),
+            mimeType: 'application/pdf',
+          }, {
+            type: 'text',
+            text: `PDF exported (${allElements.length} elements, ${format}${landscape ? ' landscape' : ''})`,
+          }],
+        }
       }
 
       default:

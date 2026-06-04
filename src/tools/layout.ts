@@ -130,4 +130,138 @@ export const exportTools: Tool[] = [
       },
     },
   },
+  {
+    name: 'export_png',
+    description:
+      'Export the current canvas as a PNG image. ' +
+      'Returns base64-encoded PNG. Uses server-side Playwright — no browser required.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        background: {
+          type: 'boolean',
+          description: 'Include white background (default: true)',
+        },
+      },
+    },
+  },
+  {
+    name: 'export_jpg',
+    description:
+      'Export the current canvas as a JPEG image. ' +
+      'Returns base64-encoded JPEG. Uses server-side Playwright — no browser required.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        background: {
+          type: 'boolean',
+          description: 'Include white background (default: true)',
+        },
+      },
+    },
+  },
+]
+
+export const groupingTools: Tool[] = [
+  {
+    name: 'group_elements',
+    description:
+      'Group multiple canvas elements together. ' +
+      'Grouped elements move and transform as a unit. ' +
+      'Returns the group ID for future reference.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        elementIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'IDs of elements to group (minimum 2)',
+        },
+        groupId: {
+          type: 'string',
+          description: 'Custom group ID (auto-generated if omitted)',
+        },
+      },
+      required: ['elementIds'],
+    },
+  },
+  {
+    name: 'ungroup_elements',
+    description:
+      'Dissolve a group, releasing all child elements back to the canvas as independent shapes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        groupId: {
+          type: 'string',
+          description: 'ID of the group element to dissolve',
+        },
+      },
+      required: ['groupId'],
+    },
+  },
+]
+
+export const stickyNoteTools: Tool[] = [
+  {
+    name: 'create_sticky',
+    description:
+      'Create a sticky note on the canvas. Shorthand for create_element with type=note and sensible defaults. ' +
+      'Stickies default to yellow, solid fill, and the draw font.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        x: { type: 'number', description: 'X position' },
+        y: { type: 'number', description: 'Y position' },
+        text: { type: 'string', description: 'Sticky note content' },
+        id: { type: 'string', description: 'Custom element ID (auto-generated if omitted)' },
+        color: {
+          type: 'string',
+          description: "Color: 'yellow' (default) | 'orange' | 'green' | 'light-blue' | 'violet' | 'red' | 'black' | 'white'",
+        },
+        size: {
+          type: 'string',
+          enum: ['s', 'm', 'l', 'xl'],
+          description: 'Text size preset (default: m)',
+        },
+        font: {
+          type: 'string',
+          enum: ['draw', 'sans', 'serif', 'mono'],
+          description: 'Font family (default: draw)',
+        },
+        width: { type: 'number', description: 'Width in pixels (default: 200)' },
+        height: { type: 'number', description: 'Height in pixels (default: 200)' },
+      },
+      required: ['x', 'y'],
+    },
+  },
+  {
+    name: 'update_sticky',
+    description: 'Update the content or styling of an existing sticky note.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'ID of the sticky note to update' },
+        text: { type: 'string', description: 'New text content' },
+        color: { type: 'string', description: "Color name: 'yellow' | 'orange' | 'green' | 'light-blue' | 'violet' | 'red'" },
+        size: { type: 'string', enum: ['s', 'm', 'l', 'xl'], description: 'Text size preset' },
+        font: { type: 'string', enum: ['draw', 'sans', 'serif', 'mono'], description: 'Font family' },
+        x: { type: 'number', description: 'New X position' },
+        y: { type: 'number', description: 'New Y position' },
+        width: { type: 'number', description: 'New width' },
+        height: { type: 'number', description: 'New height' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'list_sticky_templates',
+    description:
+      'Return a list of pre-built sticky note templates with recommended colors, sizes, and use cases. ' +
+      'Call this before create_sticky for inspiration.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
 ]

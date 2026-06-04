@@ -65,7 +65,14 @@ tldraw-mcp-server/
 | `clear_canvas` | Wipe all elements (`confirm: true` required) |
 | `read_diagram_guide` | Return color names, fill/dash/size presets, layout rules |
 | `auto_layout` | Automatic layout using dagre (hierarchical), force-directed, or grid |
+| `group_elements` | Group 2+ elements so they move as a unit |
+| `ungroup_elements` | Dissolve a group, release children as independent shapes |
+| `create_sticky` | Create a sticky note with sensible defaults |
+| `update_sticky` | Update content/styling of an existing sticky note |
+| `list_sticky_templates` | Return pre-built sticky note presets |
 | `export_svg` | Export canvas as SVG string |
+| `export_png` | Export canvas as PNG (server-side Playwright) |
+| `export_jpg` | Export canvas as JPEG (server-side Playwright) |
 | `export_pdf` | Export canvas as PDF (Playwright for full fidelity, pdf-lib fallback) |
 
 ## REST API (Canvas Server)

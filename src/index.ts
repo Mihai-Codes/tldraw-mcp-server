@@ -23,8 +23,7 @@ import { createToolNameAdapter } from './client-adapter.js'
 import { loadConfig, type TldrawMcpConfig } from './config.js'
 import { startMcpServer } from './transport.js'
 import { CanvasElement, ApiResponse, generateId, ELEMENT_TYPES } from './types.js'
-import { layoutTools } from './tools/layout.js'
-import { exportTools } from './tools/layout.js'
+import { layoutTools, exportTools, groupingTools, stickyNoteTools } from './tools/layout.js'
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 
@@ -453,6 +452,8 @@ const tools: Tool[] = [
   },
   ...layoutTools,
   ...exportTools,
+  ...groupingTools,
+  ...stickyNoteTools,
 ]
 
 // ─── Diagram Design Guide ─────────────────────────────────────────────────────
@@ -542,9 +543,13 @@ const MUTATING_TOOLS = new Set([
   'set_viewport',
   'align_elements',
   'distribute_elements',
+  'group_elements',
+  'ungroup_elements',
+  'create_sticky',
+  'update_sticky',
 ])
 
-const DESTRUCTIVE_TOOLS = new Set(['delete_element', 'clear_canvas', 'import_scene', 'restore_snapshot'])
+const DESTRUCTIVE_TOOLS = new Set(['delete_element', 'clear_canvas', 'import_scene', 'restore_snapshot', 'ungroup_elements'])
 
 function withContractHints(tool: Tool): Tool {
   const mutates = MUTATING_TOOLS.has(tool.name)
@@ -762,7 +767,7 @@ export function createTldrawMcpServer(config: TldrawMcpConfig = loadConfig()): S
           throw new Error(err.error ?? `Screenshot failed: ${res.status}`)
         }
         const data = (await res.json()) as { success: boolean; format: string; data: string }
-        if (!data.data) throw new Error('Screenshot returned empty data — is the canvas open in a browser?')
+        if (!data.data) throw new Error('Screenshot returned empty data — ensure Playwright is installed (`npm install playwright && npx playwright install chromium`) and the canvas server is running.')
         return {
           content: [
             { type: 'image' as const, data: data.data, mimeType: 'image/png' },
@@ -1014,6 +1019,167 @@ export function createTldrawMcpServer(config: TldrawMcpConfig = loadConfig()): S
             text: `PDF exported (${allElements.length} elements, ${format}${landscape ? ' landscape' : ''})`,
           }],
         }
+      }
+
+      // ── export_png ──────────────────────────────────────────────────────────
+      case 'export_png': {
+        const { exportPng } = await import('./export/svg.js')
+        const { background = true } = z.object({ background: z.boolean().optional() }).parse(args ?? {})
+        const allElements = await queryElements({})
+        const result = await exportPng(allElements, background)
+        return {
+          content: [
+            { type: 'image' as const, data: result.data, mimeType: 'image/png' },
+            { type: 'text', text: `PNG exported (${allElements.length} elements)` },
+          ],
+        }
+      }
+
+      // ── export_jpg ──────────────────────────────────────────────────────────
+      case 'export_jpg': {
+        const { exportJpg } = await import('./export/svg.js')
+        const { background = true } = z.object({ background: z.boolean().optional() }).parse(args ?? {})
+        const allElements = await queryElements({})
+        const result = await exportJpg(allElements, background)
+        return {
+          content: [
+            { type: 'image' as const, data: result.data, mimeType: 'image/jpeg' },
+            { type: 'text', text: `JPEG exported (${allElements.length} elements)` },
+          ],
+        }
+      }
+
+      // ── group_elements ──────────────────────────────────────────────────────
+      case 'group_elements': {
+        const { elementIds, groupId: customGroupId } = z.object({
+          elementIds: z.array(z.string()).min(2, 'At least 2 elements required to form a group'),
+          groupId: z.string().optional(),
+        }).parse(args)
+
+        const groupId = customGroupId ?? generateId()
+
+        // Verify all elements exist
+        const allElements = await queryElements({})
+        const elementMap = new Map(allElements.map((e) => [e.id, e]))
+        const missing = elementIds.filter((id) => !elementMap.has(id))
+        if (missing.length > 0) throw new Error(`Elements not found: ${missing.join(', ')}`)
+
+        // Create group via canvas server
+        const res = await canvasFetch('/api/elements/groups', {
+          method: 'POST',
+          body: JSON.stringify({ groupId, elementIds }),
+        })
+        const json = (await res.json()) as ApiResponse
+        if (!res.ok || !json.success) throw new Error(json.error ?? 'Group creation failed')
+
+        return {
+          content: [{
+            type: 'text',
+            text: `Grouped ${elementIds.length} elements into group "${groupId}".\nGroup ID: ${groupId}\nMembers: ${elementIds.join(', ')}`,
+          }],
+        }
+      }
+
+      // ── ungroup_elements ────────────────────────────────────────────────────
+      case 'ungroup_elements': {
+        const { groupId } = z.object({ groupId: z.string() }).parse(args)
+
+        const res = await canvasFetch(`/api/elements/groups/${encodeURIComponent(groupId)}`, {
+          method: 'DELETE',
+        })
+        const json = (await res.json()) as ApiResponse
+        if (!res.ok || !json.success) throw new Error(json.error ?? 'Ungroup failed')
+
+        const childIds: string[] = json.childIds ?? []
+        return {
+          content: [{
+            type: 'text',
+            text: `Group "${groupId}" dissolved. ${childIds.length} element(s) released: ${childIds.join(', ')}`,
+          }],
+        }
+      }
+
+      // ── create_sticky ───────────────────────────────────────────────────────
+      case 'create_sticky': {
+        const params = z.object({
+          x: z.number(),
+          y: z.number(),
+          text: z.string().optional(),
+          id: z.string().optional(),
+          color: z.string().optional(),
+          size: z.enum(['s', 'm', 'l', 'xl']).optional(),
+          font: z.enum(['draw', 'sans', 'serif', 'mono']).optional(),
+          width: z.number().optional(),
+          height: z.number().optional(),
+        }).parse(args)
+
+        const el = await createElement({
+          type: 'note',
+          x: params.x,
+          y: params.y,
+          text: params.text ?? '',
+          id: params.id ?? generateId(),
+          color: (params.color ?? 'yellow') as CanvasElement['color'],
+          fill: 'solid',
+          size: params.size ?? 'm',
+          font: params.font ?? 'draw',
+          width: params.width ?? 200,
+          height: params.height ?? 200,
+        } as Partial<CanvasElement>)
+
+        return {
+          content: [{
+            type: 'text',
+            text: `Sticky note created!\n\n${JSON.stringify(el, null, 2)}`,
+          }],
+        }
+      }
+
+      // ── update_sticky ───────────────────────────────────────────────────────
+      case 'update_sticky': {
+        const { id, ...updates } = z.object({
+          id: z.string(),
+          text: z.string().optional(),
+          color: z.string().optional(),
+          size: z.enum(['s', 'm', 'l', 'xl']).optional(),
+          font: z.enum(['draw', 'sans', 'serif', 'mono']).optional(),
+          x: z.number().optional(),
+          y: z.number().optional(),
+          width: z.number().optional(),
+          height: z.number().optional(),
+        }).parse(args)
+
+        const el = await updateElement(id, updates as Partial<CanvasElement>)
+        return {
+          content: [{
+            type: 'text',
+            text: `Sticky note updated!\n\n${JSON.stringify(el, null, 2)}`,
+          }],
+        }
+      }
+
+      // ── list_sticky_templates ───────────────────────────────────────────────
+      case 'list_sticky_templates': {
+        const templates = [
+          { name: 'Default Yellow', color: 'yellow', fill: 'solid', size: 'm', font: 'draw', width: 200, height: 200, use: 'General notes, ideas, reminders' },
+          { name: 'Action Item', color: 'orange', fill: 'solid', size: 'm', font: 'sans', width: 200, height: 160, use: 'Tasks, TODOs, next steps' },
+          { name: 'Warning / Risk', color: 'red', fill: 'solid', size: 'm', font: 'sans', width: 200, height: 160, use: 'Blockers, risks, issues' },
+          { name: 'Insight / Learning', color: 'light-blue', fill: 'solid', size: 'm', font: 'sans', width: 220, height: 160, use: 'Key insights, takeaways, learnings' },
+          { name: 'Decision', color: 'violet', fill: 'solid', size: 'm', font: 'sans', width: 220, height: 180, use: 'Decisions made, rationale, context' },
+          { name: 'Success / Done', color: 'green', fill: 'solid', size: 'm', font: 'draw', width: 200, height: 160, use: 'Completed items, wins, milestones' },
+          { name: 'Context / Background', color: 'light-green', fill: 'solid', size: 's', font: 'serif', width: 240, height: 200, use: 'Background info, references, context' },
+          { name: 'Large Heading Note', color: 'yellow', fill: 'solid', size: 'l', font: 'draw', width: 300, height: 120, use: 'Section headers, category labels' },
+          { name: 'Mini Tag', color: 'grey', fill: 'solid', size: 's', font: 'mono', width: 120, height: 80, use: 'Labels, tags, short callouts' },
+        ]
+        const lines = ['# Sticky Note Templates', '', 'Use these presets with `create_sticky`:', '']
+        for (const t of templates) {
+          lines.push(`## ${t.name}`)
+          lines.push(`- **Use for**: ${t.use}`)
+          lines.push(`- color: \`${t.color}\` | size: \`${t.size}\` | font: \`${t.font}\` | fill: \`${t.fill}\``)
+          lines.push(`- width: ${t.width} | height: ${t.height}`)
+          lines.push('')
+        }
+        return { content: [{ type: 'text', text: lines.join('\n') }] }
       }
 
       default:

@@ -18,6 +18,7 @@ export type ElementType =
   | 'star'
   | 'cloud'
   | 'hexagon'
+  | 'group'
 
 /**
  * Color names supported by tldraw.
@@ -89,6 +90,10 @@ export interface CanvasElement {
   locked?: boolean
   /** Group membership IDs */
   groupIds?: string[]
+  /** For group elements: IDs of child elements */
+  childIds?: string[]
+  /** Parent group element ID (if this element belongs to a group) */
+  parentId?: string
   /** For arrows: ID of element to bind the arrow start to */
   startElementId?: string
   /** For arrows: ID of element to bind the arrow end to */
@@ -119,6 +124,7 @@ export type WSMessageFromServer =
   | { type: 'canvas_cleared' }
   | { type: 'viewport'; params: ViewportParams }
   | { type: 'screenshot_request'; format: 'png' | 'svg'; background: boolean; requestId: string }
+  | { type: 'element_ungrouped'; groupId: string; childIds: string[] }
 
 export type WSMessageFromClient =
   | { type: 'screenshot_result'; format: 'png' | 'svg'; data: string; requestId?: string; error?: string }
@@ -141,6 +147,8 @@ export interface ApiResponse {
   message?: string
   error?: string
   count?: number
+  childIds?: string[]
+  groupId?: string
 }
 
 // ─── Utility ──────────────────────────────────────────────────────────────────
@@ -167,4 +175,5 @@ export const ELEMENT_TYPES: ElementType[] = [
   'star',
   'cloud',
   'hexagon',
+  'group',
 ]

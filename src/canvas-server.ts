@@ -415,6 +415,116 @@ app.delete('/api/elements/:id', (req: Request, res: Response) => {
   res.json({ success: true, message: `Element ${id} deleted` } satisfies ApiResponse)
 })
 
+// ─── REST: Grouping ──────────────────────────────────────────────────────────
+
+/** POST /api/elements/groups — group elements together */
+app.post('/api/elements/groups', (req: Request, res: Response) => {
+  const { groupId, elementIds } = req.body as { groupId?: string; elementIds?: string[] }
+
+  if (!groupId) {
+    res.status(400).json({ success: false, error: '`groupId` is required' } satisfies ApiResponse)
+    return
+  }
+  if (!Array.isArray(elementIds) || elementIds.length < 2) {
+    res.status(400).json({ success: false, error: '`elementIds` must be an array of at least 2 IDs' } satisfies ApiResponse)
+    return
+  }
+
+  const missing = elementIds.find((id) => !elements.has(id))
+  if (missing) {
+    res.status(404).json({ success: false, error: `Element ${missing} not found` } satisfies ApiResponse)
+    return
+  }
+
+  if (elements.has(groupId)) {
+    res.status(409).json({ success: false, error: `Element ${groupId} already exists` } satisfies ApiResponse)
+    return
+  }
+
+  const now = new Date().toISOString()
+
+  // Compute bounding box of members
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const id of elementIds) {
+    const el = elements.get(id)!
+    minX = Math.min(minX, el.x)
+    minY = Math.min(minY, el.y)
+    maxX = Math.max(maxX, el.x + (el.width ?? 160))
+    maxY = Math.max(maxY, el.y + (el.height ?? 80))
+  }
+
+  // Create a group element to represent the container
+  const groupElement: CanvasElement = {
+    id: groupId,
+    type: 'group',
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
+    childIds: elementIds,
+    color: 'black',
+    fill: 'none',
+    dash: 'draw',
+    size: 'm',
+    font: 'draw',
+    opacity: 100,
+    createdAt: now,
+    updatedAt: now,
+    version: 1,
+  } as CanvasElement
+
+  elements.set(groupId, groupElement)
+
+  // Update each child with parentId
+  const updatedChildren: CanvasElement[] = elementIds.map((id) => {
+    const el = elements.get(id)!
+    const updated: CanvasElement = { ...el, parentId: groupId, updatedAt: now, version: el.version + 1 }
+    elements.set(id, updated)
+    return updated
+  })
+
+  broadcast({ type: 'element_created', element: groupElement })
+  broadcast({ type: 'elements_batch_updated', elements: updatedChildren })
+  res.status(201).json({ success: true, element: groupElement, childIds: elementIds } satisfies ApiResponse)
+})
+
+/** DELETE /api/elements/groups/:groupId — dissolve a group */
+app.delete('/api/elements/groups/:groupId', (req: Request, res: Response) => {
+  const groupId = req.params.groupId as string
+  const groupEl = elements.get(groupId)
+
+  if (!groupEl) {
+    res.status(404).json({ success: false, error: `Group ${groupId} not found` } satisfies ApiResponse)
+    return
+  }
+  if (groupEl.type !== 'group') {
+    res.status(400).json({ success: false, error: `Element ${groupId} is not a group` } satisfies ApiResponse)
+    return
+  }
+
+  const childIds = groupEl.childIds ?? []
+  const now = new Date().toISOString()
+
+  // Clear parentId from all children
+  const releasedChildren: CanvasElement[] = childIds.map((id) => {
+    const el = elements.get(id)
+    if (!el) return null
+    const updated: CanvasElement = { ...el, parentId: undefined, updatedAt: now, version: el.version + 1 }
+    elements.set(id, updated)
+    return updated
+  }).filter(Boolean) as CanvasElement[]
+
+  // Remove the group element
+  elements.delete(groupId)
+
+  broadcast({ type: 'element_deleted', id: groupId })
+  if (releasedChildren.length > 0) {
+    broadcast({ type: 'elements_batch_updated', elements: releasedChildren })
+  }
+
+  res.json({ success: true, message: `Group ${groupId} dissolved`, childIds } satisfies ApiResponse)
+})
+
 // ─── REST: Viewport ───────────────────────────────────────────────────────────
 
 app.post('/api/viewport', (req: Request, res: Response) => {

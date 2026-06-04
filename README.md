@@ -261,7 +261,9 @@ No migration is required for existing AdaL users — stdio remains the default. 
 
 ---
 
-## MCP Tools (20 tools)
+## MCP Tools (27 tools)
+
+### Canvas Operations
 
 | Tool | Description |
 |------|-------------|
@@ -272,27 +274,51 @@ No migration is required for existing AdaL users — stdio remains the default. 
 | `query_elements` | List/filter elements by type and bounding box |
 | `batch_create_elements` | Create multiple elements atomically |
 | `clear_canvas` | Remove all elements (requires `confirm: true`) |
-| `read_diagram_guide` | Return tldraw color names, presets, and layout best practices |
-| `describe_scene` | Summarize the current canvas elements, positions, labels, and connections |
-| `get_canvas_screenshot` | Capture a PNG screenshot from the live browser canvas |
+
+### Grouping
+
+| Tool | Description |
+|------|-------------|
+| `group_elements` | Group 2+ elements — they move and transform as a unit |
+| `ungroup_elements` | Dissolve a group, releasing all children as independent shapes |
+
+### Sticky Notes
+
+| Tool | Description |
+|------|-------------|
+| `create_sticky` | Create a sticky note with sensible defaults (yellow, solid fill) |
+| `update_sticky` | Update the content or styling of an existing sticky note |
+| `list_sticky_templates` | Return pre-built sticky templates with recommended colors and use cases |
+
+### Layout & Alignment
+
+| Tool | Description |
+|------|-------------|
+| `align_elements` | Align multiple elements left/center/right/top/middle/bottom |
+| `distribute_elements` | Distribute elements evenly along horizontal or vertical axis |
+| `auto_layout` | Automatically arrange using dagre, force-directed, or grid layout |
+
+### Viewport & Scene
+
+| Tool | Description |
+|------|-------------|
+| `set_viewport` | Zoom, pan, zoom-to-fit, or center on a specific element |
+| `read_diagram_guide` | Return color names, presets, and layout best practices |
+| `describe_scene` | Summarize all canvas elements, positions, labels, and connections |
 | `export_scene` | Export all elements as a JSON snapshot |
 | `import_scene` | Import a JSON scene in replace or merge mode |
 | `snapshot_scene` | Save the current canvas as a named in-memory snapshot |
 | `restore_snapshot` | Restore a previously saved named snapshot |
-| `set_viewport` | Zoom, pan, zoom-to-fit, or center on a specific element |
-| `align_elements` | Align multiple elements using an atomic batch update |
-| `distribute_elements` | Distribute multiple elements evenly using an atomic batch update |
-| `auto_layout` | Automatically arrange elements using dagre, force-directed, or grid layout |
-| `export_svg` | Export the current canvas as an SVG string |
-| `export_pdf` | Export the current canvas as a PDF file |
 
-### Roadmap
+### Export
 
-| Category | Tools | Status |
-|----------|-------|--------|
-| **Grouping** | `group_elements`, `ungroup_elements` | Planned |
-| **Advanced Export** | `export_png` (via Playwright), `export_jpg` | Planned |
-| **Sticky Notes** | `create_sticky`, `update_sticky`, `list_sticky_templates` | Planned |
+| Tool | Description |
+|------|-------------|
+| `get_canvas_screenshot` | Capture PNG from the canvas (server-side via Playwright, no browser needed) |
+| `export_svg` | Export canvas as an SVG string |
+| `export_png` | Export canvas as a PNG image (server-side Playwright) |
+| `export_jpg` | Export canvas as a JPEG image (server-side Playwright) |
+| `export_pdf` | Export canvas as a PDF (Playwright for full fidelity, pdf-lib fallback) |
 
 ---
 

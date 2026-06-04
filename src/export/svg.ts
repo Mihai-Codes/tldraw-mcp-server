@@ -237,6 +237,22 @@ export function generateSvg(elements: CanvasElement[], background = true): strin
  * Works without a browser open — uses the SVG generator + headless Chromium.
  */
 export async function exportPng(elements: CanvasElement[], background = true): Promise<{ data: string; format: string }> {
+  return exportRasterImage(elements, 'png', background)
+}
+
+/**
+ * Server-side JPEG export using Playwright.
+ * Works without a browser open — uses the SVG generator + headless Chromium.
+ */
+export async function exportJpg(elements: CanvasElement[], background = true): Promise<{ data: string; format: string }> {
+  return exportRasterImage(elements, 'jpeg', background)
+}
+
+async function exportRasterImage(
+  elements: CanvasElement[],
+  type: 'png' | 'jpeg',
+  background: boolean
+): Promise<{ data: string; format: string }> {
   const svg = generateSvg(elements, background)
 
   let playwright: typeof import('playwright') | null = null
@@ -267,8 +283,8 @@ export async function exportPng(elements: CanvasElement[], background = true): P
     await page.setContent(html, { waitUntil: 'networkidle' })
     await page.evaluate(() => document.fonts.ready)
 
-    const data = await page.screenshot({ type: 'png' })
-    return { data: Buffer.from(data).toString('base64'), format: 'png' }
+    const data = await page.screenshot({ type, omitBackground: !background })
+    return { data: Buffer.from(data).toString('base64'), format: type === 'jpeg' ? 'jpg' : 'png' }
   } finally {
     await browser.close()
   }

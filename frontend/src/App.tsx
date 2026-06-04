@@ -189,8 +189,17 @@ function toTldrawType(type: string): TLShapeType {
   if (type === 'arrow') return 'arrow'
   if (type === 'line') return 'line'
   if (type === 'frame') return 'frame'
+  if (type === 'group') return 'group'
   // rectangle, ellipse, diamond, triangle, star, cloud, hexagon → all use type "geo"
   return 'geo'
+}
+
+/** Build tldraw group shape props */
+function buildGroupProps(el: CanvasElement): Record<string, unknown> {
+  return {
+    w: el.width ?? 160,
+    h: el.height ?? 80,
+  }
 }
 
 /** Apply a single element to the editor (create or update) */
@@ -198,7 +207,19 @@ function applyElement(editor: Editor, el: CanvasElement): void {
   const shapeId = createShapeId(el.id)
   const existing = editor.getShape(shapeId)
   const shapeType = toTldrawType(el.type)
-  const props = buildShapeProps(el)
+
+  // Groups use tldraw's native grouping — create shapes first then group them
+  if (el.type === 'group' && el.childIds && el.childIds.length >= 2) {
+    const childShapeIds = el.childIds
+      .map((id) => createShapeId(id))
+      .filter((id) => editor.getShape(id) !== undefined)
+    if (childShapeIds.length >= 2 && !existing) {
+      editor.groupShapes(childShapeIds, { groupId: shapeId })
+    }
+    return
+  }
+
+  const props = el.type === 'group' ? buildGroupProps(el) : buildShapeProps(el)
 
   if (existing) {
     if (existing.type !== shapeType) {

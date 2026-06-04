@@ -10,8 +10,8 @@
 process.env.NODE_DISABLE_COLORS = '1'
 process.env.NO_COLOR = '1'
 
+import { pathToFileURL } from 'node:url'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -19,16 +19,24 @@ import {
   Tool,
 } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
+import { createToolNameAdapter } from './client-adapter.js'
+import { loadConfig, type TldrawMcpConfig } from './config.js'
+import { startMcpServer } from './transport.js'
 import { CanvasElement, ApiResponse, generateId, ELEMENT_TYPES } from './types.js'
 
 // ─── Config ────────────────────────────────────────────────────────────────────
 
-const EXPRESS_SERVER_URL = process.env.EXPRESS_SERVER_URL || 'http://127.0.0.1:3000'
+let activeConfig = loadConfig()
+const TOOL_CONTRACT_VERSION = '0.2.0'
+
+function expressServerUrl(): string {
+  return activeConfig.expressServerUrl
+}
 
 // ─── Canvas HTTP Helpers ───────────────────────────────────────────────────────
 
 async function canvasFetch(path: string, options: RequestInit = {}): Promise<Response> {
-  return fetch(`${EXPRESS_SERVER_URL}${path}`, {
+  return fetch(`${expressServerUrl()}${path}`, {
     ...options,
     headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
   })
@@ -518,24 +526,92 @@ const DIAGRAM_GUIDE = `# tldraw MCP — Diagram Design Guide
 
 // ─── MCP Server ───────────────────────────────────────────────────────────────
 
-const server = new Server(
-  { name: 'tldraw-mcp-server', version: '0.1.0' },
-  {
-    capabilities: {
-      tools: Object.fromEntries(
-        tools.map((t) => [t.name, { description: t.description, inputSchema: t.inputSchema }])
-      ),
+const MUTATING_TOOLS = new Set([
+  'create_element',
+  'update_element',
+  'delete_element',
+  'batch_create_elements',
+  'clear_canvas',
+  'import_scene',
+  'snapshot_scene',
+  'restore_snapshot',
+  'set_viewport',
+  'align_elements',
+  'distribute_elements',
+])
+
+const DESTRUCTIVE_TOOLS = new Set(['delete_element', 'clear_canvas', 'import_scene', 'restore_snapshot'])
+
+function withContractHints(tool: Tool): Tool {
+  const mutates = MUTATING_TOOLS.has(tool.name)
+  const destructive = DESTRUCTIVE_TOOLS.has(tool.name)
+
+  return {
+    ...tool,
+    description:
+      `${tool.description}\n\n` +
+      `Contract version: ${TOOL_CONTRACT_VERSION}. ` +
+      `Side effects: ${mutates ? 'mutates canvas/server state' : 'read-only or export-oriented'}.` +
+      (destructive ? ' Destructive: may remove or replace existing canvas content.' : ''),
+    annotations: {
+      title: tool.name,
+      readOnlyHint: !mutates,
+      destructiveHint: destructive,
+      idempotentHint: !mutates,
+      openWorldHint: false,
+    },
+    _meta: {
+      ...(tool._meta ?? {}),
+      'tldraw-mcp/version': TOOL_CONTRACT_VERSION,
     },
   }
-)
+}
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }))
+function compactToolDefinition(tool: Tool): Tool {
+  // Keep strict schemas for MCP clients, but omit verbose descriptions/annotations.
+  return {
+    name: tool.name,
+    inputSchema: tool.inputSchema,
+  }
+}
 
-server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
-  const { name, arguments: args } = request.params
+export function listToolsForConfig(config: TldrawMcpConfig): Tool[] {
+  const adapter = createToolNameAdapter(config)
 
-  try {
-    switch (name) {
+  return tools
+    .map(withContractHints)
+    .map((tool) => (config.performanceMode ? compactToolDefinition(tool) : tool))
+    .map((tool) => ({
+      ...tool,
+      name: adapter.exposeName(tool.name),
+    }))
+}
+
+export function createTldrawMcpServer(config: TldrawMcpConfig = loadConfig()): Server {
+  activeConfig = config
+
+  const exposedTools = listToolsForConfig(config)
+  const nameAdapter = createToolNameAdapter(config)
+
+  const server = new Server(
+    { name: config.serverName, version: config.serverVersion },
+    {
+      capabilities: {
+        tools: Object.fromEntries(
+          exposedTools.map((t) => [t.name, { description: t.description, inputSchema: t.inputSchema }])
+        ),
+      },
+    }
+  )
+
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: exposedTools }))
+
+  server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
+    const { arguments: args } = request.params
+    const name = nameAdapter.normalizeName(request.params.name)
+
+    try {
+      switch (name) {
 
       case 'create_element': {
         const params = BaseElementProps.parse(args)
@@ -847,23 +923,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       default:
         throw new Error(`Unknown tool: ${name}`)
     }
-  } catch (err) {
-    const message = err instanceof z.ZodError
-      ? `Invalid arguments: ${err.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ')}`
-      : (err as Error).message
-    return { content: [{ type: 'text', text: `Error: ${message}` }], isError: true }
-  }
-})
+    } catch (err) {
+      const message = err instanceof z.ZodError
+        ? `Invalid arguments: ${err.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ')}`
+        : (err as Error).message
+      return { content: [{ type: 'text', text: `Error: ${message}` }], isError: true }
+    }
+  })
+
+  return server
+}
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const transport = new StdioServerTransport()
-  await server.connect(transport)
-  console.error(`tldraw MCP server running (canvas: ${EXPRESS_SERVER_URL})`)
+  const config = loadConfig()
+  await startMcpServer(() => createTldrawMcpServer(config), config)
+  console.error(`tldraw MCP server running (${config.transport}; canvas: ${config.expressServerUrl})`)
 }
 
-main().catch((error) => {
-  console.error('Fatal error:', error)
-  process.exit(1)
-})
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error('Fatal error:', error)
+    process.exit(1)
+  })
+}

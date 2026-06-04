@@ -68,7 +68,27 @@ The `.mcp.json` at the repo root works out-of-the-box for any project-level MCP 
 
 ## MCP Client Configuration
 
-### AdaL CLI (Primary Target)
+The default launch mode is still **stdio**, so existing AdaL/Claude/Cursor configs continue to work. Set `MCP_TRANSPORT=http` only when you want a shared Streamable HTTP endpoint.
+
+### Transport and adapter options
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `MCP_TRANSPORT` | `stdio` | `stdio` for subprocess clients, `http` for Streamable HTTP |
+| `MCP_CLIENT` | `generic` | Optional client hint: `adal`, `claude`, `cursor`, `openai`, `generic` |
+| `MCP_SERVER_NAME` | `tldraw` | Server name used for optional tool prefixes |
+| `INCLUDE_SERVER_IN_TOOL_NAMES` | `false` | Expose tools as `tldraw__create_element` while still accepting prefixed calls |
+| `MCP_PERFORMANCE_MODE` | `false` | Compact tool descriptions to reduce discovery context |
+| `MCP_HTTP_HOST` | `127.0.0.1` | HTTP bind host |
+| `MCP_HTTP_PORT` | `3333` | HTTP bind port |
+| `MCP_HTTP_PATH` | `/mcp` | Streamable HTTP MCP path |
+| `MCP_ALLOWED_ORIGINS` | local origins | Comma-separated Origin allowlist for HTTP |
+| `MCP_ALLOWED_HOSTS` | local hosts | Comma-separated Host allowlist for HTTP |
+| `MCP_AUTH_TOKEN` | unset | Optional bearer-token auth for HTTP |
+
+HTTP auth is disabled by default for local development. For shared endpoints, set `MCP_AUTH_TOKEN` and send `Authorization: Bearer <token>`.
+
+### AdaL CLI
 
 **Project-level** — the `.mcp.json` in this repo is pre-configured. Just open AdaL in this directory and the server is auto-discovered.
 
@@ -78,9 +98,41 @@ adal
 # AdaL auto-loads .mcp.json — tldraw tools are available immediately
 ```
 
-Or add manually via the slash command:
+Example `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "tldraw": {
+      "command": "node",
+      "args": ["dist/index.js"],
+      "env": {
+        "EXPRESS_SERVER_URL": "http://127.0.0.1:3000",
+        "MCP_TRANSPORT": "stdio",
+        "MCP_CLIENT": "adal"
+      }
+    }
+  }
+}
 ```
-/mcp
+
+Performance mode for lower discovery overhead:
+
+```json
+{
+  "mcpServers": {
+    "tldraw": {
+      "command": "node",
+      "args": ["dist/index.js"],
+      "env": {
+        "EXPRESS_SERVER_URL": "http://127.0.0.1:3000",
+        "MCP_TRANSPORT": "stdio",
+        "MCP_CLIENT": "adal",
+        "MCP_PERFORMANCE_MODE": "true"
+      }
+    }
+  }
+}
 ```
 
 ### Claude Code
@@ -89,11 +141,15 @@ Or add manually via the slash command:
 # Project-level (commits .mcp.json to the repo)
 claude mcp add tldraw --scope project \
   -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
+  -e MCP_TRANSPORT=stdio \
+  -e MCP_CLIENT=claude \
   -- node /absolute/path/to/tldraw-mcp-server/dist/index.js
 
 # User-level (available across all projects)
 claude mcp add tldraw --scope user \
   -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
+  -e MCP_TRANSPORT=stdio \
+  -e MCP_CLIENT=claude \
   -- node /absolute/path/to/tldraw-mcp-server/dist/index.js
 ```
 
@@ -108,7 +164,9 @@ Config: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS
       "command": "node",
       "args": ["/absolute/path/to/tldraw-mcp-server/dist/index.js"],
       "env": {
-        "EXPRESS_SERVER_URL": "http://127.0.0.1:3000"
+        "EXPRESS_SERVER_URL": "http://127.0.0.1:3000",
+        "MCP_TRANSPORT": "stdio",
+        "MCP_CLIENT": "claude"
       }
     }
   }
@@ -126,11 +184,65 @@ Config: `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global)
       "command": "node",
       "args": ["/absolute/path/to/tldraw-mcp-server/dist/index.js"],
       "env": {
-        "EXPRESS_SERVER_URL": "http://127.0.0.1:3000"
+        "EXPRESS_SERVER_URL": "http://127.0.0.1:3000",
+        "MCP_TRANSPORT": "stdio",
+        "MCP_CLIENT": "cursor",
+        "INCLUDE_SERVER_IN_TOOL_NAMES": "false"
       }
     }
   }
 }
+```
+
+If a gateway/client expects server-prefixed tool names, set:
+
+```json
+{
+  "mcpServers": {
+    "tldraw": {
+      "command": "node",
+      "args": ["/absolute/path/to/tldraw-mcp-server/dist/index.js"],
+      "env": {
+        "EXPRESS_SERVER_URL": "http://127.0.0.1:3000",
+        "INCLUDE_SERVER_IN_TOOL_NAMES": "true"
+      }
+    }
+  }
+}
+```
+
+### OpenAI Agents SDK
+
+Use Streamable HTTP for OpenAI Agents SDK and other shared-agent environments:
+
+```bash
+MCP_TRANSPORT=http \
+MCP_HTTP_HOST=127.0.0.1 \
+MCP_HTTP_PORT=3333 \
+MCP_HTTP_PATH=/mcp \
+EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
+MCP_CLIENT=openai \
+node dist/index.js
+```
+
+Example Agents SDK server entry:
+
+```ts
+import { Agent } from '@openai/agents'
+
+const agent = new Agent({
+  name: 'diagram-agent',
+  instructions: 'Use the tldraw MCP server to create and inspect diagrams.',
+  mcpServers: [
+    {
+      name: 'tldraw',
+      url: 'http://127.0.0.1:3333/mcp',
+      headers: process.env.MCP_AUTH_TOKEN
+        ? { Authorization: `Bearer ${process.env.MCP_AUTH_TOKEN}` }
+        : undefined,
+    },
+  ],
+})
 ```
 
 ### Codex CLI
@@ -138,8 +250,46 @@ Config: `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global)
 ```bash
 codex mcp add tldraw \
   --env EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
+  --env MCP_TRANSPORT=stdio \
   -- node /absolute/path/to/tldraw-mcp-server/dist/index.js
 ```
+
+### Supergateway / systemd example
+
+If you need an HTTP endpoint while keeping the stdio server path, `supergateway` can wrap the existing command:
+
+```bash
+npx -y supergateway \
+  --stdio "node /opt/tldraw-mcp-server/dist/index.js" \
+  --port 3333 \
+  --baseUrl http://127.0.0.1:3333 \
+  --ssePath /mcp \
+  --messagePath /messages
+```
+
+Example `systemd` unit:
+
+```ini
+[Unit]
+Description=tldraw MCP HTTP Gateway
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/tldraw-mcp-server
+Environment=EXPRESS_SERVER_URL=http://127.0.0.1:3000
+Environment=MCP_PERFORMANCE_MODE=true
+ExecStart=/usr/bin/npx -y supergateway --stdio "node dist/index.js" --port 3333 --baseUrl http://127.0.0.1:3333 --ssePath /mcp --messagePath /messages
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Migration and rollback
+
+No migration is required for existing AdaL users: stdio remains the default. To roll back optional behavior, unset `MCP_TRANSPORT`, `MCP_PERFORMANCE_MODE`, and `INCLUDE_SERVER_IN_TOOL_NAMES`, then use the original `.mcp.json` shape with only `EXPRESS_SERVER_URL`.
 
 ---
 

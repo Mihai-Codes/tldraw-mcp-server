@@ -14,6 +14,9 @@
     "dev:frontend": "cd frontend && npm run dev",
     "type-check": "tsc --noEmit",
     "test": "vitest",
+    "test:smoke:stdio": "RUN_MCP_SMOKE=true MCP_TRANSPORT=stdio vitest run test/mcp-transport-smoke.test.ts",
+    "test:smoke:http": "RUN_MCP_SMOKE=true MCP_TRANSPORT=http vitest run test/mcp-transport-smoke.test.ts",
+    "bench:tools": "npm run build --silent && node scripts/bench-tool-definitions.mjs",
     "test:bind": "node scripts/test-bind.cjs"
   },
   "keywords": [

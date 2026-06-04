@@ -8,6 +8,8 @@
  */
 
 import express, { Request, Response, NextFunction } from 'express'
+import rateLimit from 'express-rate-limit'
+import helmet from 'helmet'
 import { createServer } from 'http'
 import { WebSocketServer, WebSocket } from 'ws'
 import path from 'path'
@@ -38,7 +40,36 @@ const snapshots = new Map<string, { name: string; elements: CanvasElement[]; cre
 
 const app = express()
 const httpServer = createServer(app)
-const wss = new WebSocketServer({ server: httpServer, path: '/ws' })
+const wss = new WebSocketServer({
+  server: httpServer,
+  path: '/ws',
+  maxPayload: 64 * 1024,
+  verifyClient: (info, callback) => {
+    const origin = info.origin || info.req.headers.origin
+    const host = info.req.headers.host
+
+    if (!origin && !host) {
+      callback(true)
+      return
+    }
+
+    if (origin) {
+      try {
+        const url = new URL(origin)
+        const allowedHosts = ['localhost', '127.0.0.1', host?.split(':')[0]]
+        if (!allowedHosts.includes(url.hostname)) {
+          callback(false, 403, 'Forbidden: invalid origin')
+          return
+        }
+      } catch {
+        callback(false, 403, 'Forbidden: invalid origin')
+        return
+      }
+    }
+
+    callback(true)
+  },
+})
 
 /** Active WebSocket clients */
 const wsClients = new Set<WebSocket>()
@@ -134,11 +165,34 @@ function requestScreenshot(format: 'png' | 'svg', background: boolean): Promise<
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
-app.use(express.json())
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}))
+
+app.use(express.json({ limit: '10kb' }))
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many requests, please try again later' },
+})
+
+app.use('/api/', apiLimiter)
 
 // CORS — allow Vite dev server on :5173 during development
 app.use((_req: Request, res: Response, next: NextFunction) => {
-  res.setHeader('Access-Control-Allow-Origin', '*')
+  const origin = _req.headers.origin
+  const allowedOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000', 'http://127.0.0.1:3000']
+
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+  } else if (!origin) {
+    res.setHeader('Access-Control-Allow-Origin', '*')
+  }
+
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
   next()

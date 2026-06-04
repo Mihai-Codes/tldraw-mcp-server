@@ -69,8 +69,12 @@ export function computeForceLayout(
   const positionMap = new Map<string, { x: number; y: number }>()
 
   for (const node of nodes) {
-    const x = (node.x ?? 0) - node.width / 2
-    const y = (node.y ?? 0) - node.height / 2
+    const rawX = node.x ?? 0
+    const rawY = node.y ?? 0
+    const safeX = isFinite(rawX) ? rawX : 0
+    const safeY = isFinite(rawY) ? rawY : 0
+    const x = safeX - node.width / 2
+    const y = safeY - node.height / 2
 
     positions.push({ id: node.id, x, y, width: node.width, height: node.height })
     positionMap.set(node.id, { x, y })

@@ -45,7 +45,7 @@ export function computeDagreLayout(
 
   for (const node of graph.nodes) {
     const dagreNode = g.node(node.id)
-    if (!dagreNode) continue
+    if (!dagreNode || !isFinite(dagreNode.x) || !isFinite(dagreNode.y)) continue
 
     const x = dagreNode.x - node.width / 2
     const y = dagreNode.y - node.height / 2

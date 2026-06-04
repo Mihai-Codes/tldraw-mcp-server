@@ -48,23 +48,26 @@ const wss = new WebSocketServer({
     const origin = info.origin || info.req.headers.origin
     const host = info.req.headers.host
 
-    if (!origin && !host) {
-      callback(true)
+    if (!origin) {
+      callback(false, 403, 'Forbidden: missing origin')
       return
     }
 
-    if (origin) {
-      try {
-        const url = new URL(origin)
-        const allowedHosts = ['localhost', '127.0.0.1', host?.split(':')[0]]
-        if (!allowedHosts.includes(url.hostname)) {
-          callback(false, 403, 'Forbidden: invalid origin')
-          return
-        }
-      } catch {
+    if (origin === 'null') {
+      callback(false, 403, 'Forbidden: null origin')
+      return
+    }
+
+    try {
+      const url = new URL(origin)
+      const allowedHosts = ['localhost', '127.0.0.1', host?.split(':')[0]]
+      if (!allowedHosts.includes(url.hostname)) {
         callback(false, 403, 'Forbidden: invalid origin')
         return
       }
+    } catch {
+      callback(false, 403, 'Forbidden: invalid origin')
+      return
     }
 
     callback(true)

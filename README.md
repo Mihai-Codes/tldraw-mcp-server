@@ -354,9 +354,17 @@ npx @modelcontextprotocol/inspector --cli \
 
 ## Troubleshooting
 
-### Screenshot tools return an error
+### Screenshot tool fails with "empty data"
 
-`get_canvas_screenshot` requires a live browser client because screenshots are rendered by the tldraw frontend, not by the MCP stdio process. Start the canvas server with `npm run canvas`, open `http://127.0.0.1:3000` in a browser, wait for the canvas to load, then call the screenshot tool again.
+`get_canvas_screenshot` prefers a server-side render (SVG + Playwright, no browser required). If Playwright is not installed or the export fails for any reason, it falls back to browser-based rendering. To ensure screenshots always work:
+
+```bash
+# Install Playwright (one-time)
+npm install playwright
+npx playwright install chromium
+```
+
+If the error persists even with Playwright installed, ensure the canvas server is running (`npm run canvas`) and try again.
 
 ---
 

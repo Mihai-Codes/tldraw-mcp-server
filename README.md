@@ -4,15 +4,14 @@
 
 # tldraw MCP Server
 
-> Programmatic canvas toolkit for AI agents - create, read, update, and delete tldraw shapes in real time via the Model Context Protocol.
+> Programmatic canvas toolkit for AI agents — create, read, update, and delete tldraw shapes in real time via the Model Context Protocol.
 
+[![CI](https://github.com/chindris-mihai-alexandru/tldraw-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/chindris-mihai-alexandru/tldraw-mcp-server/actions/workflows/ci.yml)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![tldraw](https://img.shields.io/badge/tldraw-4.5-000000)](https://tldraw.dev/)
 [![MCP](https://img.shields.io/badge/Model_Context_Protocol-Server-5E5CE6)](https://modelcontextprotocol.io/)
-[![Express](https://img.shields.io/badge/Express-4.21-000000?logo=express&logoColor=white)](https://expressjs.com/)
-[![WebSocket](https://img.shields.io/badge/WebSocket-ws_8.21-010101)](https://github.com/websockets/ws)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## What It Is
@@ -20,6 +19,14 @@
 An MCP server that gives AI agents (AdaL, Claude, Cursor, Codex CLI…) programmatic control over a live tldraw canvas. Draw diagrams, architecture charts, and flowcharts by just describing what you want.
 
 **Inspired by** [mcp_excalidraw](https://github.com/yctimlin/mcp_excalidraw) — the same quality and completeness, built for the tldraw ecosystem.
+
+## Architecture
+
+<img src="assets/architecture-diagram.png" alt="tldraw MCP Server architecture — three-layer flow from MCP clients through the MCP server to the canvas server and browser UI" />
+
+**Flow:** MCP client → MCP server (Zod validation) → Canvas server (Express HTTP) → WebSocket broadcast → Browser (tldraw editor, real time).
+
+---
 
 ## Quick Start
 
@@ -68,52 +75,31 @@ The `.mcp.json` at the repo root works out-of-the-box for any project-level MCP 
 
 ## MCP Client Configuration
 
-The default launch mode is still **stdio**, so existing AdaL/Claude/Cursor configs continue to work. Set `MCP_TRANSPORT=http` only when you want a shared Streamable HTTP endpoint.
+The default transport is **stdio**, so existing configs continue to work. Set `MCP_TRANSPORT=http` for shared HTTP endpoints (OpenAI Agents SDK, etc.).
 
 ### Transport and adapter options
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `MCP_TRANSPORT` | `stdio` | `stdio` for subprocess clients, `http` for Streamable HTTP |
-| `MCP_CLIENT` | `generic` | Optional client hint: `adal`, `claude`, `cursor`, `openai`, `generic` |
-| `MCP_SERVER_NAME` | `tldraw` | Server name used for optional tool prefixes |
-| `INCLUDE_SERVER_IN_TOOL_NAMES` | `false` | Expose tools as `tldraw__create_element` while still accepting prefixed calls |
+| `MCP_CLIENT` | `generic` | Client hint: `adal`, `claude`, `cursor`, `openai`, `generic` |
+| `MCP_SERVER_NAME` | `tldraw` | Server name for optional tool prefixes |
+| `INCLUDE_SERVER_IN_TOOL_NAMES` | `false` | Expose tools as `tldraw__create_element` |
 | `MCP_PERFORMANCE_MODE` | `false` | Compact tool descriptions to reduce discovery context |
 | `MCP_HTTP_HOST` | `127.0.0.1` | HTTP bind host |
 | `MCP_HTTP_PORT` | `3333` | HTTP bind port |
 | `MCP_HTTP_PATH` | `/mcp` | Streamable HTTP MCP path |
-| `MCP_ALLOWED_ORIGINS` | local origins | Comma-separated Origin allowlist for HTTP |
-| `MCP_ALLOWED_HOSTS` | local hosts | Comma-separated Host allowlist for HTTP |
-| `MCP_AUTH_TOKEN` | unset | Optional bearer-token auth for HTTP |
-
-HTTP auth is disabled by default for local development. For shared endpoints, set `MCP_AUTH_TOKEN` and send `Authorization: Bearer <token>`.
+| `MCP_ALLOWED_ORIGINS` | local origins | Comma-separated Origin allowlist |
+| `MCP_ALLOWED_HOSTS` | local hosts | Comma-separated Host allowlist |
+| `MCP_AUTH_TOKEN` | unset | Bearer-token auth for HTTP (set and send `Authorization: Bearer <token>`) |
 
 ### AdaL CLI
 
-**Project-level** — the `.mcp.json` in this repo is pre-configured. Just open AdaL in this directory and the server is auto-discovered.
+Project-level — the `.mcp.json` in this repo is pre-configured. Open AdaL in this directory and the server is auto-discovered.
 
 ```bash
 cd tldraw-mcp-server
 adal
-# AdaL auto-loads .mcp.json — tldraw tools are available immediately
-```
-
-Example `.mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "tldraw": {
-      "command": "node",
-      "args": ["dist/index.js"],
-      "env": {
-        "EXPRESS_SERVER_URL": "http://127.0.0.1:3000",
-        "MCP_TRANSPORT": "stdio",
-        "MCP_CLIENT": "adal"
-      }
-    }
-  }
-}
 ```
 
 Performance mode for lower discovery overhead:
@@ -138,7 +124,7 @@ Performance mode for lower discovery overhead:
 ### Claude Code
 
 ```bash
-# Project-level (commits .mcp.json to the repo)
+# Project-level
 claude mcp add tldraw --scope project \
   -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
   -e MCP_TRANSPORT=stdio \
@@ -186,30 +172,14 @@ Config: `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global)
       "env": {
         "EXPRESS_SERVER_URL": "http://127.0.0.1:3000",
         "MCP_TRANSPORT": "stdio",
-        "MCP_CLIENT": "cursor",
-        "INCLUDE_SERVER_IN_TOOL_NAMES": "false"
+        "MCP_CLIENT": "cursor"
       }
     }
   }
 }
 ```
 
-If a gateway/client expects server-prefixed tool names, set:
-
-```json
-{
-  "mcpServers": {
-    "tldraw": {
-      "command": "node",
-      "args": ["/absolute/path/to/tldraw-mcp-server/dist/index.js"],
-      "env": {
-        "EXPRESS_SERVER_URL": "http://127.0.0.1:3000",
-        "INCLUDE_SERVER_IN_TOOL_NAMES": "true"
-      }
-    }
-  }
-}
-```
+If a gateway expects server-prefixed tool names (`tldraw__create_element`), add `"INCLUDE_SERVER_IN_TOOL_NAMES": "true"` to the env.
 
 ### OpenAI Agents SDK
 
@@ -224,8 +194,6 @@ EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
 MCP_CLIENT=openai \
 node dist/index.js
 ```
-
-Example Agents SDK server entry:
 
 ```ts
 import { Agent } from '@openai/agents'
@@ -254,9 +222,9 @@ codex mcp add tldraw \
   -- node /absolute/path/to/tldraw-mcp-server/dist/index.js
 ```
 
-### Supergateway / systemd example
+### Supergateway / systemd
 
-If you need an HTTP endpoint while keeping the stdio server path, `supergateway` can wrap the existing command:
+Wrap the stdio server with `supergateway` for an HTTP endpoint:
 
 ```bash
 npx -y supergateway \
@@ -289,13 +257,11 @@ WantedBy=multi-user.target
 
 ### Migration and rollback
 
-No migration is required for existing AdaL users: stdio remains the default. To roll back optional behavior, unset `MCP_TRANSPORT`, `MCP_PERFORMANCE_MODE`, and `INCLUDE_SERVER_IN_TOOL_NAMES`, then use the original `.mcp.json` shape with only `EXPRESS_SERVER_URL`.
+No migration is required for existing AdaL users — stdio remains the default. To roll back optional behavior, unset `MCP_TRANSPORT`, `MCP_PERFORMANCE_MODE`, and `INCLUDE_SERVER_IN_TOOL_NAMES`, then use the original `.mcp.json` shape with only `EXPRESS_SERVER_URL`.
 
 ---
 
-## MCP Tools
-
-### Implemented (20 tools)
+## MCP Tools (20 tools)
 
 | Tool | Description |
 |------|-------------|
@@ -304,7 +270,7 @@ No migration is required for existing AdaL users: stdio remains the default. To 
 | `update_element` | Partially update any element property |
 | `delete_element` | Delete an element by ID |
 | `query_elements` | List/filter elements by type and bounding box |
-| `batch_create_elements` | Create multiple elements atomically (efficient for diagrams) |
+| `batch_create_elements` | Create multiple elements atomically |
 | `clear_canvas` | Remove all elements (requires `confirm: true`) |
 | `read_diagram_guide` | Return tldraw color names, presets, and layout best practices |
 | `describe_scene` | Summarize the current canvas elements, positions, labels, and connections |
@@ -318,7 +284,7 @@ No migration is required for existing AdaL users: stdio remains the default. To 
 | `distribute_elements` | Distribute multiple elements evenly using an atomic batch update |
 | `auto_layout` | Automatically arrange elements using dagre, force-directed, or grid layout |
 | `export_svg` | Export the current canvas as an SVG string |
-| `export_pdf` | Export the current canvas as a PDF file (requires Playwright for full fidelity) |
+| `export_pdf` | Export the current canvas as a PDF file |
 
 ### Roadmap
 
@@ -326,6 +292,7 @@ No migration is required for existing AdaL users: stdio remains the default. To 
 |----------|-------|--------|
 | **Grouping** | `group_elements`, `ungroup_elements` | Planned |
 | **Advanced Export** | `export_png` (via Playwright), `export_jpg` | Planned |
+| **Sticky Notes** | `create_sticky`, `update_sticky`, `list_sticky_templates` | Planned |
 
 ---
 
@@ -345,34 +312,6 @@ No migration is required for existing AdaL users: stdio remains the default. To 
 
 ---
 
-## Architecture
-
-```
-┌─────────────────────┐         ┌─────────────────────────┐
-│   MCP Client        │  stdio  │   MCP Server             │
-│   AdaL, Claude,     │◀───────▶│   src/index.ts           │
-│   Cursor, etc.      │         │   17 tools · Zod validate│
-└─────────────────────┘         └────────────┬────────────┘
-                                             │ HTTP REST
-                                             ▼
-                                ┌─────────────────────────┐
-                                │   Canvas Server          │
-                                │   src/canvas-server.ts   │
-                                │   Express · Port 3000    │
-                                └────────────┬────────────┘
-                                             │ WebSocket /ws
-                                             ▼
-                                ┌─────────────────────────┐
-                                │   Browser UI             │
-                                │   frontend/src/App.tsx   │
-                                │   tldraw React app       │
-                                └─────────────────────────┘
-```
-
-**Flow:** MCP client calls a tool → MCP server validates with Zod → HTTP POST to canvas server → canvas server broadcasts via WebSocket → browser frontend applies to tldraw editor in real time.
-
----
-
 ## Development
 
 ```bash
@@ -389,23 +328,9 @@ npm run dev:frontend # Vite dev server on :5173
 # Build everything
 npm run build:all
 
-# Run regression tests once
-npm test -- --run
-
-# Test MCP tools directly
-npx @modelcontextprotocol/inspector --cli \
-  -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
-  -- node dist/index.js --method tools/list
-```
-
-### Testing
-
-```bash
-# Run the Vitest regression suite once
+# Run the full test suite once
 npm test -- --run
 ```
-
-The tests cover REST edge cases such as duplicate custom IDs, atomic batch create validation, and atomic batch updates.
 
 ### Testing a Tool
 
@@ -418,7 +343,14 @@ npx @modelcontextprotocol/inspector --cli \
   --tool-arg type=rectangle --tool-arg x=100 --tool-arg y=100 \
   --tool-arg width=200 --tool-arg height=80 \
   --tool-arg text="Hello" --tool-arg color=blue --tool-arg fill=semi
+
+# List all tools
+npx @modelcontextprotocol/inspector --cli \
+  -e EXPRESS_SERVER_URL=http://127.0.0.1:3000 \
+  -- node dist/index.js --method tools/list
 ```
+
+---
 
 ## Troubleshooting
 
